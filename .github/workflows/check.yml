@@ -20,5 +20,5 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Python packages
         run: python3 -m venv .venv && .venv/bin/pip install -q -r requirements-dev.txt
-      - name: Unit tests (also: compose.yaml, .env.example and the Dockerfile agree, tests/unit/test_deploy.py)
+      - name: "Unit tests (also: compose.yaml, .env.example and the Dockerfile agree, tests/unit/test_deploy.py)"
         run: .venv/bin/pytest -q tests/unit
