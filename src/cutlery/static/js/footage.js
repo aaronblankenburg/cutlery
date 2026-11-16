@@ -26,12 +26,25 @@ worker.onmessage = ({ data }) => {
   pending.delete(data.id);
   data.ok ? p.resolve(data.result) : p.reject(Object.assign(new Error(data.error), { code: data.code }));
 };
+// A worker whose code did not load (for example a download cut short) fires "error" and never answers:
+// every waiting call fails instead of hanging, and so does every later one.
+let workerFailed = null;
+worker.onerror = (e) => {
+  e.preventDefault?.();
+  workerFailed = new Error(e.message || 'the transcoding worker did not start');
+  for (const p of pending.values()) p.reject(workerFailed);
+  pending.clear();
+};
 function call(type, payload = {}, onProgress) {
+  if (workerFailed) return Promise.reject(workerFailed);
   const id = nextId++;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject, onProgress });
     worker.postMessage({ id, type, ...payload });
   });
+}
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 }
 
 // ------------------------------------------------------------------ IndexedDB: resume state per clip
@@ -297,7 +310,16 @@ async function run(fileList) {
   const token = ++runToken;
   showError('');
   const items = collect(fileList);
-  if (!items.length) return;
+  if (!items.length) {
+    showError(t('footage.error.no_videos', { n: fileList.length }));
+    return;
+  }
+  $('folder-summary').textContent = t('footage.preparing');
+  try {
+    await ready;                     // the browser's capabilities (the worker has started)
+  } catch {
+    return;                          // the message is shown already
+  }
   const folder = items[0].folder;
   api(`/api/projects/${project}/folder`, { method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: folder }) }).catch(() => {});
@@ -405,19 +427,31 @@ setInterval(showAnalysis, 5000);
 // ------------------------------------------------------------------ start
 
 await load();
+// The folder can be chosen at once; run() waits until the worker is ready.
+$('folder-input').addEventListener('change', (e) => run(e.target.files));
+const ready = withTimeout(call('capabilities'), 30000).then((c) => { caps = c; return c; },
+  (err) => {
+    console.error('cutlery: transcoding worker', err);
+    showError(t('footage.browser.worker_failed'));
+    $('pick-folder').setAttribute('aria-disabled', 'true');
+    $('folder-input').disabled = true;
+    throw err;
+  });
+ready.catch(() => {});
+window.cutlery = { get caps() { return caps; }, rows, run, ready };   // for tests and debugging
 await loadServerState();
-caps = await call('capabilities');
+try { await ready; } catch { /* shown above */ }
 const problems = [];
-if (!caps.webcodecs) problems.push(t('footage.browser.no_webcodecs'));
-else if (!caps.avc) problems.push(t('footage.browser.no_avc'));
-if (!caps.opfs) problems.push(t('footage.browser.no_opfs'));
-if (caps.webcodecs && !caps.aac) $('browser-notice').textContent = t('footage.browser.no_aac');
-$('browser-notice').hidden = !(caps.webcodecs && !caps.aac);
+if (caps) {
+  if (!caps.webcodecs) problems.push(t('footage.browser.no_webcodecs'));
+  else if (!caps.avc) problems.push(t('footage.browser.no_avc'));
+  if (!caps.opfs) problems.push(t('footage.browser.no_opfs'));
+  if (caps.webcodecs && !caps.aac) $('browser-notice').textContent = t('footage.browser.no_aac');
+  $('browser-notice').hidden = !(caps.webcodecs && !caps.aac);
+}
 if (problems.length) {
   showError(problems.join(' '));
   $('pick-folder').setAttribute('aria-disabled', 'true');
   $('folder-input').disabled = true;
 }
 showAnalysis();
-$('folder-input').addEventListener('change', (e) => run(e.target.files));
-window.cutlery = { caps, rows, run };   // for tests and debugging

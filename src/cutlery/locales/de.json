@@ -426,5 +426,8 @@
   "settings.claude.remove": "Token entfernen",
   "settings.claude.remove_confirm": "Token entfernen? Fassungen warten dann, bis ein neuer eingetragen ist.",
   "settings.claude.saved": "Gespeichert. Wartende Fassungen lassen sich jetzt fortsetzen.",
-  "settings.claude.error": "Nicht gespeichert: {message}"
+  "settings.claude.error": "Nicht gespeichert: {message}",
+  "footage.browser.worker_failed": "Die Umwandlung im Browser konnte nicht starten (eine Datei der Seite kam nicht vollständig an). Lade die Seite neu; passiert es wieder, leere den Browser-Cache für diese Seite.",
+  "footage.preparing": "Umwandlung wird vorbereitet …",
+  "footage.error.no_videos": "Keine der {n} Dateien in diesem Ordner ist ein Video, das Cutlery lesen kann (MP4, MOV, MTS, MKV, AVI, MXF, WebM …). Wähle den Ordner mit deinen Clips."
 }

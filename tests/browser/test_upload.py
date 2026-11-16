@@ -161,3 +161,28 @@ def test_reload_continues_without_redoing_finished_clips(page, server, clips, tm
     clips_state = {c["rel_path"]: c["state"] for c in
                    page.evaluate(f"() => fetch('/api/projects/{pid}/clips').then(r => r.json())")["clips"]}
     assert set(clips_state.values()) == {"uploaded"}
+
+
+def test_a_worker_that_does_not_load_is_reported_not_silent(page, server, clips, tmp_path):
+    """A download of the transcoding library cut short (seen behind a reverse proxy): the page says so instead of
+    ignoring the chosen folder."""
+    def truncated(route):
+        body = route.fetch().body()
+        route.fulfill(status=200, body=body[:147456], headers={"content-type": "text/javascript"})
+    page.context.route("**/mediabunny-1.64.0.min.mjs", truncated)
+    from conftest import new_project_api
+    new_project_api(page, server)
+    page.wait_for_selector("#error-notice:not([hidden])", timeout=40000)
+    text = page.inner_text("#error-notice")
+    assert "reload" in text.lower() or "neu" in text.lower(), text
+    assert page.is_disabled("#folder-input")
+
+
+def test_a_folder_without_videos_says_so(page, server, tmp_path):
+    folder = tmp_path / "Holiday"
+    folder.mkdir()
+    (folder / "photo.jpg").write_bytes(b"\xff\xd8\xff")
+    new_project(page, server)
+    page.set_input_files("#folder-input", str(folder))
+    page.wait_for_selector("#error-notice:not([hidden])", timeout=10000)
+    assert "1" in page.inner_text("#error-notice")
