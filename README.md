@@ -9,7 +9,8 @@ links to the original files on your computer.
 **Status:** planning. Nothing is built yet.
 
 - `PROMPT.md` – the build brief for Claude Code (German)
-- `docs/design/` – the agreed GUI designs (Logo, Projects, New project, Status, Review, Export)
+- `docs/design/` – the agreed GUI designs (logo and variants, Projects, New project, Status, Review, Export)
+- `assets/` – logo (`logo.svg`, `favicon.svg`, `logo-mono.svg`): a film strip cut in two
 
 ## Getting started
 
