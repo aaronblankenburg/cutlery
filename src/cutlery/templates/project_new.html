@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set nav = 'new' %}
+{% block title %}{{ t('nav.new_project') }}{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('nav.new_project') }}</h1>
+    <p>{{ t('new.lead') }}</p>
+  </div>
+</div>
+<form class="card stack" method="post" action="/projects/new">
+  <div>
+    <label for="name">{{ t('new.name') }}</label>
+    <input type="text" id="name" name="name" required maxlength="120" autofocus>
+  </div>
+  {% if error %}<div class="notice error">{{ t(error) }}</div>{% endif %}
+  <div><button class="button primary" type="submit">{{ t('new.create') }}</button></div>
+</form>
+{% endblock %}

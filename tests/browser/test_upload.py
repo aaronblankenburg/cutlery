@@ -1,0 +1,211 @@
+"""Browser tests: transcoding, sidecar and resumable upload with the generated test clips.
+
+Run with:  pytest -m browser tests/browser
+Chromium tests use the installed Google Chrome (channel "chrome"; it has the H.264 codecs), WebKit tests use
+Playwright's WebKit. Each test starts its own Cutlery server on 127.0.0.1 with a temporary password.
+"""
+from __future__ import annotations
+
+import json
+import secrets
+import shutil
+import socket
+import subprocess
+import threading
+import time
+
+import pytest
+
+pytestmark = pytest.mark.browser
+playwright = pytest.importorskip("playwright.sync_api")
+
+CHROME_ARGS: list[str] = []
+USABLE = ["Day 1/2024-06-01 10-15-00 h264.mp4", "Day 2/ntsc 29.97.mov", "Day 2/start timecode.mov",
+          "Mono 44k/mono 44.1 kHz.mp4", "Phone/portrait rotated.mp4", "Phone/vfr.mp4",
+          "Small/already small 512x288.mp4"]
+
+
+def free_port():
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+@pytest.fixture
+def server(cfg):
+    import uvicorn
+    from cutter.review_app import set_password
+
+    from cutlery.app import create_app
+
+    password = secrets.token_urlsafe(12)
+    set_password.store(str(cfg.htpasswd), "cutlery", password)
+    port = free_port()
+    srv = uvicorn.Server(uvicorn.Config(create_app(cfg), host="127.0.0.1", port=port, log_level="warning"))
+    thread = threading.Thread(target=srv.run, daemon=True)
+    thread.start()
+    for _ in range(100):
+        if srv.started:
+            break
+        time.sleep(0.05)
+    yield {"url": f"http://127.0.0.1:{port}", "password": password, "cfg": cfg}
+    srv.should_exit = True
+    thread.join(5)
+
+
+def launch(p, name):
+    if name == "chrome":
+        if not shutil.which("google-chrome") and not shutil.which("google-chrome-stable"):
+            pytest.skip("Google Chrome is not installed")
+        return p.chromium.launch(channel="chrome", headless=True, args=CHROME_ARGS)
+    try:
+        return p.webkit.launch()
+    except Exception as e:      # browser not installed
+        pytest.skip(f"WebKit is not available: {e}")
+
+
+@pytest.fixture(params=["chrome", "webkit"])
+def page(request, server):
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = launch(p, request.param)
+        ctx = browser.new_context(http_credentials={"username": "cutlery", "password": server["password"]},
+                                  bypass_csp=False)
+        pg = ctx.new_page()
+        pg.browser_name = request.param
+        errors = []
+        pg.on("pageerror", lambda e: errors.append(str(e)))
+        yield pg
+        browser.close()
+        assert not errors, errors
+
+
+def new_project(page, server, name="Test"):
+    page.goto(server["url"] + "/projects/new")
+    page.fill("#name", name)
+    page.click("button[type=submit]")
+    page.wait_for_url("**/footage")
+    page.wait_for_function("() => window.cutlery && window.cutlery.caps")
+    return page.url.split("/")[-2]
+
+
+def rows(page):
+    return page.evaluate("() => [...window.cutlery.rows.values()].map(r => ({path: r.relPath, status: r.status, "
+                         "reason: r.reason || ''}))")
+
+
+def wait_done(page, timeout=180):
+    end = time.time() + timeout
+    while time.time() < end:
+        r = rows(page)
+        if r and all(x["status"] in ("uploaded", "unsupported", "failed") for x in r):
+            return {x["path"]: x for x in r}
+        time.sleep(0.5)
+    raise AssertionError(f"not finished: {rows(page)}")
+
+
+def ffprobe(path, *args):
+    return json.loads(subprocess.run(["ffprobe", "-v", "error", *args, "-of", "json", str(path)],
+                                     capture_output=True, text=True, check=True).stdout)
+
+
+def test_transcode_and_upload(page, server, clips):
+    pid = new_project(page, server)
+    caps = page.evaluate("() => window.cutlery.caps")
+    if not caps["avc"]:
+        pytest.skip(f"{page.browser_name} cannot encode H.264 here")
+    page.set_input_files("#folder-input", str(clips))
+    result = wait_done(page)
+    cfg = server["cfg"]
+
+    # the broken file is reported, never skipped silently; HEVC only where the browser cannot decode it
+    assert result["Broken/not a video.mts"]["status"] == "unsupported"
+    assert "Phone/.landscape source.mp4" not in result          # hidden files are ignored
+    hevc = result["Day 1/hevc main10.mov"]["status"]
+    assert hevc in ("uploaded", "unsupported")
+    usable = USABLE + (["Day 1/hevc main10.mov"] if hevc == "uploaded" else [])
+    for name in usable:
+        assert result[name]["status"] == "uploaded", result[name]
+    assert page.locator("#unsupported-notice").is_visible()
+
+    media = cfg.work_dir / "projects" / pid / "media"
+    sidecars = cfg.data_dir / "projects" / pid / "sidecars"
+    for name in usable:
+        original, standin = clips / name, media / (name + ".mp4")
+        sc = json.loads((sidecars / (name + ".json")).read_text())
+        o = ffprobe(original, "-show_streams", "-show_format")
+        ov = next(s for s in o["streams"] if s["codec_type"] == "video")
+        oa = next(s for s in o["streams"] if s["codec_type"] == "audio")
+        # sidecar = what ffprobe says about the original
+        assert sc["video"]["r_frame_rate"] == ov["r_frame_rate"], name
+        assert sc["video"]["avg_frame_rate"] == ov["avg_frame_rate"], name
+        assert sc["video"]["nb_frames"] == int(ov["nb_frames"]), name
+        assert (sc["video"]["width"], sc["video"]["height"]) == (ov["width"], ov["height"]), name
+        assert abs(sc["duration"] - float(ov["duration"])) < 0.002, name
+        assert (sc["audio"]["channels"], sc["audio"]["sample_rate"]) == (oa["channels"], int(oa["sample_rate"]))
+        ff_rot = next((int(d["rotation"]) for d in ov.get("side_data_list", []) if "rotation" in d), 0)
+        assert sc["video"]["rotation"] == (-ff_rot) % 360, name          # sidecar: clockwise
+        tc = ov.get("tags", {}).get("timecode") or o["format"].get("tags", {}).get("timecode")
+        assert sc["timecode"] == tc, name
+        assert sc["size"] == original.stat().st_size
+        # stand-in: upright, long side 640 (never upscaled), H.264 + AAC 48 kHz, same frames at the same times
+        s = ffprobe(standin, "-show_streams")
+        sv = next(x for x in s["streams"] if x["codec_type"] == "video")
+        sa = next(x for x in s["streams"] if x["codec_type"] == "audio")
+        assert sv["codec_name"] == "h264" and sa["codec_name"] == "aac" and sa["sample_rate"] == "48000"
+        assert sa["channels"] == oa["channels"]
+        assert not any("rotation" in d for d in sv.get("side_data_list", []))
+        upright = (ov["height"], ov["width"]) if ff_rot % 180 else (ov["width"], ov["height"])
+        assert max(sv["width"], sv["height"]) == min(640, max(upright)), name
+        assert (sv["width"] > sv["height"]) == (upright[0] > upright[1]), name
+        pts = lambda f: [float(x["pts_time"]) for x in ffprobe(f, "-select_streams", "v:0",
+                                                                "-show_entries", "packet=pts_time")["packets"]]
+        po, ps = sorted(pts(original)), sorted(pts(standin))
+        assert len(po) == len(ps), name
+        assert max(abs(a - b) for a, b in zip(po, ps)) < 0.001, name
+
+    sc = json.loads((sidecars / "Day 2/ntsc 29.97.mov.json").read_text())
+    assert sc["timecode"] == "01:02:03;04" and sc["video"]["r_frame_rate"] == "30000/1001"
+    sc = json.loads((sidecars / "Phone/vfr.mp4.json").read_text())
+    assert sc["video"]["vfr"] is True
+    sc = json.loads((sidecars / "Day 1/hevc main10.mov.json").read_text())
+    assert sc["video"]["bit_depth"] == 10
+    # DJI flight data next to a clip is uploaded too
+    assert (sidecars / "Day 1/2024-06-01 10-15-00 h264.mp4.srt").read_text().startswith("1\n")
+    manifest = json.loads((cfg.data_dir / "projects" / pid / "manifest.json").read_text())
+    assert len(manifest["clips"]) == len(result)
+
+
+def test_reload_continues_without_redoing_finished_clips(page, server, clips, tmp_path):
+    if page.browser_name != "chrome":
+        pytest.skip("one browser is enough for the resume test")
+    folder = tmp_path / "footage"
+    for name in ("Day 1/2024-06-01 10-15-00 h264.mp4", "Day 2/start timecode.mov", "Phone/vfr.mp4"):
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(clips / name, folder / name)
+    pid = new_project(page, server)
+    page.set_input_files("#folder-input", str(folder))
+    end = time.time() + 120
+    while time.time() < end and not any(r["status"] == "uploaded" for r in rows(page)):
+        time.sleep(0.2)
+    page.reload()
+    page.wait_for_function("() => window.cutlery && window.cutlery.caps")
+    before = {r["path"]: r["status"] for r in rows(page)}
+    assert "uploaded" in before.values()          # the server remembers finished clips after the reload
+    seen = {}
+    page.set_input_files("#folder-input", str(folder))
+    end = time.time() + 120
+    while time.time() < end:
+        r = rows(page)
+        for x in r:
+            seen.setdefault(x["path"], set()).add(x["status"])
+        if all(x["status"] == "uploaded" for x in r):
+            break
+        time.sleep(0.05)
+    for path, status in before.items():
+        if status == "uploaded":
+            assert "transcoding" not in seen.get(path, set()), path
+    clips_state = {c["rel_path"]: c["state"] for c in
+                   page.evaluate(f"() => fetch('/api/projects/{pid}/clips').then(r => r.json())")["clips"]}
+    assert set(clips_state.values()) == {"uploaded"}

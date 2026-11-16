@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cutlery"
+version = "0.1.0.dev0"
+license = "MIT"
+description = "Self-hosted web app that cuts films from your own footage with cutter and Claude Code"
+readme = "README.md"
+requires-python = ">=3.12"
+# cutter (https://github.com/aaronblankenburg/cutter) is provided by the base image; for development it is
+# installed from its git tag, see requirements-dev.txt.
+dependencies = [
+    "starlette==1.9.0",
+    "uvicorn==0.53.0",
+    "jinja2==3.1.6",
+]
+
+[project.scripts]
+cutlery = "cutlery.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cutlery = ["templates/**/*", "static/**/*", "locales/*.json", "migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["browser: Playwright tests (need Chromium/WebKit and ffmpeg)"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+pythonpath = ["tests", "tests/unit"]

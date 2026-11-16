@@ -1,0 +1,28 @@
+# Cutlery – everything is configured in .env (copy .env.example). Start with:  docker compose up -d
+#
+# Storage: three host directories, all bind mounts (no Docker volumes), so you always know where your data is.
+#   CUTLERY_DATA_DIR    keep and back up: database, briefings, comments, cut plans, clip metadata, password hash
+#   CUTLERY_WORK_DIR    regenerable: 360p copies, analysis, renders, exports, temporary files of jobs
+#   CUTLERY_MODELS_DIR  downloaded models (Whisper, detection), shared by all projects
+# The directories must exist and belong to PUID:PGID; Cutlery refuses to start otherwise.
+name: cutlery
+
+services:
+  cutlery:
+    image: ${CUTLERY_IMAGE:-ghcr.io/aaronblankenburg/cutlery:latest}
+    build: .
+    user: "${PUID:?set PUID in .env}:${PGID:?set PGID in .env}"
+    init: true
+    restart: unless-stopped
+    environment:
+      CUTLERY_PORT: "8080"
+      CUTLERY_TRUSTED_PROXIES: ${CUTLERY_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,172.16.0.0/12}
+      CUTLERY_DISK_WARN_GB: ${CUTLERY_DISK_WARN_GB:-20}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - {type: bind, source: "${CUTLERY_DATA_DIR:?set CUTLERY_DATA_DIR in .env}", target: /data, bind: {create_host_path: false}}
+      - {type: bind, source: "${CUTLERY_WORK_DIR:?set CUTLERY_WORK_DIR in .env}", target: /work, bind: {create_host_path: false}}
+      - {type: bind, source: "${CUTLERY_MODELS_DIR:?set CUTLERY_MODELS_DIR in .env}", target: /models, bind: {create_host_path: false}}
+    ports:
+      # only on this machine by default; put a reverse proxy with HTTPS in front (examples/)
+      - "${CUTLERY_BIND:-127.0.0.1}:${CUTLERY_PORT:-8080}:8080"

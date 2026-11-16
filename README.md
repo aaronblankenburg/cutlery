@@ -13,13 +13,17 @@ computer, and render the final film there.
 
 The UI is available in English and German.
 
-**Status:** planning. Nothing is built yet.
+**Status:** in development. Milestone M1 is done: projects, browser transcoding to 360p with sidecar metadata,
+resumable upload, login, Docker image and compose file. Analysis, Claude Code jobs, review and export follow
+(see `docs/plan.md` and `docs/progress.md`).
 
 - `PROMPT.md` – the build brief for Claude Code
 - `CLAUDE.md` – standing notes for Claude Code
 - `docs/design/` – the agreed GUI designs (Logo, Projects, New project, Status, Review, Export; drawn in German).
   `docs/design/rejected-logos/` keeps the discarded logo ideas for reference.
 - `docs/progress.md` – milestone log, kept up to date by Claude Code
+- `docs/plan.md` – the approved build plan; `docs/sidecar.md` – clip metadata format;
+  `docs/m1-feasibility.md` – transcoding speed and browser findings
 - `assets/` – logo (`logo.svg`, `favicon.svg`, `logo-mono.svg`): fork and knife beside a film reel instead of a plate
 
 ## Building it
@@ -31,6 +35,17 @@ The UI is available in English and German.
    > Read PROMPT.md and present the plan.
 
 Claude Code works milestone by milestone and tells you when a milestone needs a different model.
+
+## Development
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest                       # unit tests; browser tests need Google Chrome (and WebKit, see below)
+.venv/bin/pytest -m browser            # Playwright: transcoding and upload with generated test clips
+```
+
+The browser tests generate their clips with ffmpeg (`tests/fixtures/make_clips.py`). WebKit needs
+`.venv/bin/playwright install webkit` and, on Debian/Ubuntu, `sudo apt-get install libavif16`.
 
 ## Licence
 

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% set nav = 'projects' %}
+{% block title %}{{ t('projects.title') }}{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('projects.title') }}</h1>
+    <p>{{ t('projects.lead') }}</p>
+  </div>
+  <div class="actions"><a class="button primary" href="/projects/new">{{ t('nav.new_project') }}</a></div>
+</div>
+{% if projects %}
+<div class="project-list">
+  {% for p in projects %}
+  <a class="project-row" href="/projects/{{ p.id }}/footage">
+    <div>
+      <h3>{{ p.name }}</h3>
+      <div class="meta">{{ t('projects.clips', n=p.clips) }} · <span class="js-duration" data-seconds="{{ p.duration or 0 }}"></span>{% if p.problems %} · {{ t('projects.problems', n=p.problems) }}{% endif %}</div>
+    </div>
+    {% if p.clips and p.uploaded == p.clips - (p.problems or 0) %}<span class="pill ok">{{ t('projects.state.uploaded') }}</span>
+    {% elif p.clips %}<span class="pill warn">{{ t('projects.state.uploading', done=p.uploaded or 0, total=p.clips) }}</span>
+    {% else %}<span class="pill">{{ t('projects.state.empty') }}</span>{% endif %}
+    <span class="go">{{ t('projects.open') }} →</span>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">{{ t('projects.none') }}</div>
+{% endif %}
+{% endblock %}

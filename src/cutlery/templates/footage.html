@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }}{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div>
+    <h1>{{ project.name }}</h1>
+    <p>{{ t('new.lead') }}</p>
+  </div>
+</div>
+
+<section class="card" id="footage" data-project="{{ project.id }}">
+  <header>
+    <h2>{{ t('footage.title') }}</h2>
+    <div class="actions">
+      <label class="button" for="folder-input" id="pick-folder">{{ t('footage.pick') }}</label>
+      <input type="file" id="folder-input" webkitdirectory multiple hidden>
+    </div>
+  </header>
+  <div class="stack">
+    <p class="muted small" id="folder-summary">{{ t('footage.none_picked') }}</p>
+    <div id="progress-block" hidden>
+      <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+      <p class="small" id="progress-text"></p>
+      <p class="muted small">{{ t('footage.keep_open') }}</p>
+    </div>
+    <div class="notice" id="unsupported-notice" hidden></div>
+    <div class="notice error" id="error-notice" hidden></div>
+    <div class="notice info" id="browser-notice" hidden></div>
+    <div class="table-wrap">
+      <table class="clips" id="clip-table" hidden>
+        <thead><tr>
+          <th>{{ t('footage.col.file') }}</th>
+          <th class="hide-narrow">{{ t('footage.col.original') }}</th>
+          <th class="num hide-narrow">{{ t('footage.col.size') }}</th>
+          <th class="num">{{ t('footage.col.small') }}</th>
+          <th>{{ t('footage.col.status') }}</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted small" id="telemetry-note" hidden>{{ t('footage.telemetry_note') }}</p>
+  </div>
+</section>
+
+<details class="card">
+  <summary>{{ t('project.delete') }}</summary>
+  <form method="post" action="/projects/{{ project.id }}/delete" class="stack">
+    <p class="small muted">{{ t('project.delete_lead') }}</p>
+    <label for="confirm">{{ t('project.delete_confirm', name=project.name) }}</label>
+    <input type="text" id="confirm" name="confirm" autocomplete="off">
+    {% if delete_error %}<div class="notice error">{{ t('project.delete_mismatch') }}</div>{% endif %}
+    <div><button class="button danger" type="submit">{{ t('project.delete') }}</button></div>
+  </form>
+</details>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/tus-js-client-4.3.1.min.js"></script>
+<script type="module" src="/static/js/footage.js"></script>
+{% endblock %}

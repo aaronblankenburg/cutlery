@@ -1,0 +1,130 @@
+"""Configuration from the environment.
+
+Every setting comes from an environment variable. In Docker, compose.yaml maps the operator's `.env` to fixed
+container paths (`/data`, `/work`, `/models`), so the defaults below are the container paths.
+"""
+from __future__ import annotations
+
+import dataclasses
+import ipaddress
+import os
+import pathlib
+
+
+class ConfigError(Exception):
+    """The configuration is unusable; the text says what to change."""
+
+
+@dataclasses.dataclass(frozen=True)
+class Config:
+    data_dir: pathlib.Path
+    work_dir: pathlib.Path
+    models_dir: pathlib.Path
+    host: str = "127.0.0.1"
+    port: int = 8080
+    trusted_proxies: tuple = ()
+    disk_warn_gb: float = 20.0
+    upload_expiry_h: int = 72
+
+    @property
+    def htpasswd(self) -> pathlib.Path:
+        return self.data_dir / "htpasswd"
+
+    @property
+    def database(self) -> pathlib.Path:
+        return self.data_dir / "cutlery.sqlite"
+
+
+DEFAULT_TRUSTED = "127.0.0.0/8,::1/128,172.16.0.0/12"
+
+
+def _networks(text: str) -> tuple:
+    nets = []
+    for part in (text or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError as e:
+            raise ConfigError(f"CUTLERY_TRUSTED_PROXIES: '{part}' is not an IP address or network ({e}).")
+    return tuple(nets)
+
+
+def _int(env, name, default):
+    raw = env.get(name, "")
+    if raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ConfigError(f"{name} must be a whole number, not '{raw}'.")
+
+
+def load(env=None) -> Config:
+    env = os.environ if env is None else env
+    return Config(
+        data_dir=pathlib.Path(env.get("CUTLERY_DATA_DIR") or "/data"),
+        work_dir=pathlib.Path(env.get("CUTLERY_WORK_DIR") or "/work"),
+        models_dir=pathlib.Path(env.get("CUTLERY_MODELS_DIR") or "/models"),
+        host=env.get("CUTLERY_BIND") or "127.0.0.1",
+        port=_int(env, "CUTLERY_PORT", 8080),
+        trusted_proxies=_networks(env.get("CUTLERY_TRUSTED_PROXIES", DEFAULT_TRUSTED)),
+        disk_warn_gb=float(env.get("CUTLERY_DISK_WARN_GB") or 20),
+        upload_expiry_h=_int(env, "CUTLERY_UPLOAD_EXPIRY_HOURS", 72),
+    )
+
+
+# ---------------------------------------------------------------- Claude authentication
+
+@dataclasses.dataclass(frozen=True)
+class ClaudeAuth:
+    kind: str           # "oauth" (subscription token, operator's own use) or "api_key"
+    variable: str       # the environment variable claude reads
+    secret: str
+
+    def env(self) -> dict:
+        return {self.variable: self.secret}
+
+
+AUTH_VARIABLES = {"oauth": "CLAUDE_CODE_OAUTH_TOKEN", "api_key": "ANTHROPIC_API_KEY"}
+
+AUTH_HELP = ("Set exactly one of them in .env: CLAUDE_CODE_OAUTH_TOKEN_FILE (a token from 'claude setup-token', "
+             "only for your own personal use of your Claude subscription) or ANTHROPIC_API_KEY_FILE (a key from the "
+             "Claude Console, required if you offer Cutlery to other people). The variables without _FILE work too.")
+
+
+def _secret(env, name):
+    """The value of NAME, or the content of the file named by NAME_FILE (Docker secrets). Empty means unset."""
+    direct = (env.get(name) or "").strip()
+    file_name = (env.get(name + "_FILE") or "").strip()
+    if direct and file_name:
+        raise ConfigError(f"Both {name} and {name}_FILE are set; keep only one.")
+    if not file_name:
+        return direct
+    path = pathlib.Path(file_name)
+    try:
+        st = path.stat()
+        value = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        raise ConfigError(f"{name}_FILE points to {path}, which does not exist.")
+    except OSError as e:
+        raise ConfigError(f"{name}_FILE: cannot read {path} ({e.strerror}).")
+    if st.st_mode & 0o077 and not str(path).startswith("/run/secrets/"):
+        raise ConfigError(f"{path} can be read by other users; run: chmod 600 {path}")
+    if not value:
+        raise ConfigError(f"{path} is empty.")
+    return value
+
+
+def claude_auth(env=None) -> ClaudeAuth:
+    """Exactly one way to authenticate claude must be configured, otherwise this raises ConfigError."""
+    env = os.environ if env is None else env
+    found = {kind: _secret(env, var) for kind, var in AUTH_VARIABLES.items()}
+    found = {k: v for k, v in found.items() if v}
+    if not found:
+        raise ConfigError("No Claude authentication is configured. " + AUTH_HELP)
+    if len(found) > 1:
+        raise ConfigError("Both a Claude subscription token and an API key are configured. " + AUTH_HELP)
+    kind, secret = next(iter(found.items()))
+    return ClaudeAuth(kind, AUTH_VARIABLES[kind], secret)

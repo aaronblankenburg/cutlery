@@ -1,0 +1,9 @@
+.git
+.venv
+data
+work
+models
+secrets
+.env
+tests/fixtures/generated
+**/__pycache__

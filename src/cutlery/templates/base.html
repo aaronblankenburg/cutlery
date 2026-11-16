@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} – Cutlery</title>
+  <link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/cutlery.css">
+  {% block head %}{% endblock %}
+</head>
+<body data-lang="{{ lang }}">
+  <header class="site-header">
+    <a class="wordmark" href="/"><img src="/static/img/favicon.svg" alt=""><span>Cut<span class="accent">lery</span></span></a>
+    <nav class="site-nav" aria-label="{{ t('nav.label') }}">
+      <a href="/" {% if nav == 'projects' %}aria-current="page"{% endif %}>{{ t('nav.projects') }}</a>
+      <a href="/projects/new" {% if nav == 'new' %}aria-current="page"{% endif %}>{{ t('nav.new_project') }}</a>
+    </nav>
+    <div class="lang-switch" role="group" aria-label="{{ t('nav.language') }}">
+      {% for code, name in languages %}
+      <a href="/lang/{{ code }}?next={{ request.url.path | urlencode }}" lang="{{ code }}" title="{{ name }}"
+         {% if code == lang %}aria-current="true"{% endif %}>{{ code }}</a>
+      {% endfor %}
+    </div>
+  </header>
+  <main>{% block main %}{% endblock %}</main>
+  <footer class="site-footer">
+    {% for d in disks %}
+    <span class="disk{% if d.low %} low{% endif %}" data-bytes="{{ d.free }}">{{ t('disk.' + d.name) }}: <span class="js-size" data-bytes="{{ d.free }}">{{ (d.free / 1e9) | round(1) }} GB</span> {{ t('disk.free') }}{% if d.low %} · {{ t('disk.low') }}{% endif %}</span>
+    {% endfor %}
+    <span class="disk">Cutlery {{ version }}</span>
+  </footer>
+  <script type="module" src="/static/js/format.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
