@@ -1,0 +1,22 @@
+# Caddy site for Cutlery on its own subdomain. Caddy gets the certificate by itself.
+# Put this into /etc/caddy/Caddyfile (or import it from there), replace cutlery.example.org, then
+#   systemctl reload caddy
+# Cutlery listens on 127.0.0.1:8080 (CUTLERY_BIND, CUTLERY_PORT in .env) and asks for the password itself.
+
+cutlery.example.org {
+	request_body {
+		# uploads arrive in pieces of 8 MiB (tus)
+		max_size 64MB
+	}
+	reverse_proxy 127.0.0.1:8080 {
+		# Cutlery counts failed logins per client address; it trusts this header from 127.0.0.1 only
+		header_up X-Real-IP {remote_host}
+		# job logs are server-sent events: pass them on at once
+		flush_interval -1
+		transport http {
+			read_timeout 1h
+			write_timeout 1h
+		}
+	}
+	header Strict-Transport-Security "max-age=31536000"
+}

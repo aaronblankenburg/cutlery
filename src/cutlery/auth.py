@@ -87,7 +87,7 @@ class BasicAuthMiddleware:
             return await _plain(send, 429, "Too many failed logins. Try again later.\n",
                                 [(b"retry-after", str(LOCK_S).encode())])
         if not await anyio.to_thread.run_sync(self.auth.has_users):
-            return await _plain(send, 503, "No password is set. Run: docker compose run --rm cutlery set-password\n")
+            return await _plain(send, 503, "No password is set. Run: docker compose run --rm --no-deps cutlery set-password\n")
         header = headers.get(b"authorization", b"").decode("latin-1")
         user = await anyio.to_thread.run_sync(self.auth.basic, header) if header else None
         if user is None:

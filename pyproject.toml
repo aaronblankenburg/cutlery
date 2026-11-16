@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cutlery"
-version = "0.1.0.dev0"
+dynamic = ["version"]
 license = "MIT"
 description = "Self-hosted web app that cuts films from your own footage with cutter and Claude Code"
 readme = "README.md"
@@ -19,6 +19,9 @@ dependencies = [
 
 [project.scripts]
 cutlery = "cutlery.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "cutlery.__version__"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

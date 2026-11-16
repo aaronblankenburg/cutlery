@@ -17,6 +17,10 @@ x-base: &base
   image: ${CUTLERY_IMAGE:-ghcr.io/aaronblankenburg/cutlery:latest}
   init: true
   restart: unless-stopped
+  # logs go to stdout; Docker keeps at most 3 × 20 MB per service (docker compose logs -f)
+  logging:
+    driver: json-file
+    options: {max-size: 20m, max-file: "3"}
   environment: &env
     CUTLERY_PORT: "8080"
     CUTLERY_EXECUTOR: runner
@@ -49,6 +53,9 @@ services:
     <<: *base
     build: .
     user: "${PUID:?set PUID in .env}:${PGID:?set PGID in .env}"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 512
     ports:
       # only on this machine by default; put a reverse proxy with HTTPS in front (examples/)
       - "${CUTLERY_BIND:-127.0.0.1}:${CUTLERY_PORT:-8080}:8080"
@@ -59,6 +66,7 @@ services:
     # root inside the container: it talks to the Docker socket (which is root-equivalent on the host anyway).
     # It writes nothing into the storage trees except its socket; jobs run as PUID:PGID.
     user: "0:0"
+    security_opt: ["no-new-privileges:true"]
     command: ["runner"]
     healthcheck:
       test: ["CMD", "test", "-S", "/work/.runner/runner.sock"]
