@@ -9,7 +9,7 @@ links to the original files on your computer.
 **Status:** planning. Nothing is built yet.
 
 - `PROMPT.md` – the build brief for Claude Code (German)
-- `docs/design/` – the agreed GUI designs (Projects, New project, Status, Review, Export)
+- `docs/design/` – the agreed GUI designs (Logo, Projects, New project, Status, Review, Export)
 
 ## Getting started
 
