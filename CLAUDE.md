@@ -1,6 +1,8 @@
 # SchnippSchnapp – notes for Claude Code
 
 - The build brief is PROMPT.md. Follow it; it asks for a plan and my OK before any code.
+- Each milestone in PROMPT.md names a model. At the start of a milestone, say which model it needs; if you are
+  running on another one, tell me and wait. Keep progress in docs/progress.md so a fresh session can continue.
 - GUI designs: docs/design/*.dc.html (template HTML: {{…}} holes, <sc-for>/<sc-if>, sample data in renderVals()).
   Take structure and style from them, not the template syntax or the sample data.
 - SchnippSchnapp depends on cutter (https://github.com/aaronblankenburg/cutter); never copy or patch cutter code here.

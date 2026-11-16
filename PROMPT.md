@@ -151,6 +151,10 @@ Oberfläche sind Deutsch.
 - Gestartet wird mit `claude -p` und `--output-format stream-json` im Projektordner. Den
   Fortschritt streamst du live in die UI.
 - Jede Fassung ist eine frische Sitzung. Den Kontext liefern die Projektdateien.
+- Das Modell der Jobs ist konfigurierbar (.env, mit `--model` an claude übergeben), getrennt für den
+  ersten Entwurf und für Folgefassungen. Standard: Opus 5.5 für beide; Sonnet 5.5 soll für
+  Folgefassungen mit kleinem Feedback einfach einstellbar sein. Das verwendete Modell steht im
+  Job-Protokoll und in der UI.
 
 **Anmeldung über mein Abo**
 
@@ -303,15 +307,28 @@ Mehr darf es nicht brauchen.
 Leg erst einen Plan mit Meilensteinen und der Aufteilung zwischen cutter und SchnippSchnapp vor und
 warte auf mein OK. Vorschlag für die Meilensteine:
 
-| Meilenstein | Inhalt |
-|---|---|
-| M1 | Browser-Transcodierung, Sidecar und Upload; Machbarkeit an meinem echten Material |
-| M2 | Analyse auf 360p mit Sidecar-Metadaten |
-| M3 | Export mit korrekten Pfaden (zuerst Premiere) und Roundtrip-Test |
-| M4 | Claude-Code-Jobs und nicht-interaktiver Skill-Modus |
-| M5 | Review-Buttons und GUI nach docs/design/ |
-| M6 | FCPXML-, Resolve- und FilmCraft-Export |
-| M7 | Deployment, Härtung und Doku |
+| Meilenstein | Inhalt | Modell |
+|---|---|---|
+| M0 | Plan, Aufteilung cutter / SchnippSchnapp, Architektur | Opus 5.5 (Plan-Modus) |
+| M1 | Browser-Transcodierung, Sidecar und Upload; Machbarkeit an meinem echten Material | Opus 5.5 |
+| M2 | Analyse auf 360p mit Sidecar-Metadaten | Sonnet 5.5 |
+| M3 | Export mit korrekten Pfaden (zuerst Premiere) und Roundtrip-Test | Opus 5.5 |
+| M4 | Claude-Code-Jobs und nicht-interaktiver Skill-Modus | Opus 5.5 |
+| M5 | Review-Buttons und GUI nach docs/design/ | Sonnet 5.5 |
+| M6 | FCPXML-, Resolve- und FilmCraft-Export | Opus 5.5 |
+| M7 | Deployment, Härtung und Doku | Sonnet 5.5 |
+
+**Modellwahl.** Die Spalte „Modell“ ist verbindlich. Du kannst das Modell nicht selbst wechseln, das
+mache ich mit /model. Deshalb gilt:
+
+- Nenne zu Beginn jedes Meilensteins das vorgesehene Modell. Läufst du gerade auf einem anderen,
+  sag es mir und warte, bis ich gewechselt habe.
+- Teile Meilensteine so, dass ein Modellwechsel an einer sauberen Stelle passiert: Tests grün,
+  Stand committet, offene Punkte in docs/progress.md notiert. Eine neue Sitzung muss dort ohne
+  Vorwissen weitermachen können.
+- Stößt du in einem Sonnet-Meilenstein auf ein Problem, das tiefer geht als erwartet (z. B.
+  Zeitbasis, Codecs, Relink-Kriterien), schlag mir vor, für diesen Teil auf Opus zu wechseln.
+- Fable-Modelle nur, wenn ich es ausdrücklich sage.
 
 Nach jedem Meilenstein lässt du die Tests laufen, berichtest kurz und sammelst offene Fragen. Bei
 Unklarheiten fragst du, statt zu raten. Das gilt vor allem für:
