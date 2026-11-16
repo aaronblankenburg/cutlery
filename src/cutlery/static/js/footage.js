@@ -299,6 +299,8 @@ async function run(fileList) {
   const items = collect(fileList);
   if (!items.length) return;
   const folder = items[0].folder;
+  api(`/api/projects/${project}/folder`, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: folder }) }).catch(() => {});
   const total = items.reduce((n, i) => n + i.file.size, 0);
   $('folder-summary').textContent = t('footage.summary', { folder, n: items.length, size: fmtSize(total) });
   $('pick-folder').textContent = t('footage.pick_other');

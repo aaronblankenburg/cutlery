@@ -2,23 +2,11 @@
 // Runs in the pipeline worker; only small slices of the file are read.
 import * as MB from '../vendor/mediabunny-1.64.0.min.mjs';
 import { inspect, frameRates, trackDuration, startTimecode, gpmdTrack } from './isobmff.js';
+import { fingerprint } from './fingerprint.js';
+
+export { fingerprint };
 
 export const FORMAT = 'cutlery.sidecar/1';
-const MIB = 1024 * 1024;
-
-async function sha256(blob) {
-  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export async function fingerprint(file) {
-  return {
-    size: file.size,
-    head_sha256: await sha256(file.slice(0, MIB)),
-    tail_sha256: await sha256(file.slice(Math.max(0, file.size - MIB), file.size)),
-  };
-}
-
 function textTags(raw) {
   const out = {};
   for (const [k, v] of Object.entries(raw || {})) {

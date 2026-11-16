@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 
 from .storage import ProjectPaths, write_atomic
 
@@ -36,6 +37,12 @@ def render(paths: ProjectPaths, title: str, language: str = "") -> str:
         f"transcripts = {q(str(a / 'transcripts'))}",
         f"image_analysis = {q(str(a / 'image'))}",
         f"proxies = {q(str(a / 'proxies'))}",
+        # per cut: edit list, decisions and plan stay in the data tree (cuts/<cut>/…, cutter's default);
+        # what cutter builds from them is regenerable
+        f"timeline = {q(str(paths.work / 'cuts' / '{cut}' / '{cut}'))}",
+        f"work = {q(str(paths.work / 'cuts' / '{cut}' / 'work'))}",
+        f"filmcraft_project = {q(str(paths.work / 'cuts' / '{cut}' / '{cut}.fcproj'))}",
+        f"exports = {q(str(paths.work / 'exports'))}",
         "",
     ])
 
@@ -44,6 +51,12 @@ def write(paths: ProjectPaths, title: str, language: str = "") -> pathlib.Path:
     target = paths.data / "cutter.toml"
     write_atomic(target, render(paths, title, language).encode("utf-8"))
     return target
+
+
+def cuts(paths: ProjectPaths) -> list[str]:
+    """The cuts that have an edit list, in natural order (cut2 before cut10)."""
+    found = [d.name for d in (paths.data / "cuts").glob("*") if (d / "edit.json").is_file()]
+    return sorted(found, key=lambda n: [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", n)])
 
 
 def clips_json(paths: ProjectPaths) -> list[dict]:

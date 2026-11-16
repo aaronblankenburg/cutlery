@@ -73,3 +73,55 @@ def test_cutter_analyses_a_cutlery_project(cfg, clips, tmp_path):
     # a second run keeps the IDs
     assert run_cutter(paths.data, paths.work, paths.sidecars).returncode == 0
     assert {c["file"]: c["id"] for c in cutter_project.clips_json(paths)} == ids
+
+
+def test_premiere_package_points_to_the_originals(cfg, clips, tmp_path, monkeypatch):
+    """Analysis + edit list + Cutlery's export path with the real cutter: the XML names the originals, not the copies."""
+    import dataclasses
+    import io
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    from cutlery import export
+
+    db = Database(cfg.database)
+    projects = Projects(cfg, db)
+    pid = projects.create("Island 2026")["id"]
+    paths = projects.paths(pid)
+    wanted = {"Day 2/ntsc 29.97.mov": "01:02:03;04", "Day 2/start timecode.mov": "10:00:00:00"}
+    for rel, tc in wanted.items():
+        sc = ffprobe_sidecar(clips / rel, rel)
+        sc["timecode"] = tc
+        projects.register(pid, sc)
+        stand_in = paths.standin(rel)
+        stand_in.parent.mkdir(parents=True, exist_ok=True)
+        make_standin(clips / rel, stand_in)
+    cutter_project.write(paths, "Island 2026")
+    assert run_cutter(paths.data, paths.work, paths.sidecars).returncode == 0
+    ids = {c["rel_path"]: c["id"] for c in cutter_project.clips_json(paths)}
+    edit = {"title": "Island 2026 (cut1)", "fps": 25, "music": [], "sections": [{"name": "Start", "shots": [
+        {"nr": 1, "clip": ids["Day 2/start timecode.mov"], "in": 0.2, "out": 1.4, "kind": "picture", "note": ""},
+        {"nr": 2, "clip": ids["Day 2/ntsc 29.97.mov"], "in": 0.5, "out": 1.5, "kind": "picture", "note": ""}]}]}
+    (paths.data / "cuts" / "cut1").mkdir(parents=True)
+    (paths.data / "cuts" / "cut1" / "edit.json").write_text(json.dumps(edit))
+    monkeypatch.setenv("CUTLERY_TEST_MOUNTS", f"{cfg.data_dir}:{cfg.work_dir}")
+    wrapper = str(pathlib.Path(__file__).with_name("docker_cutter.sh"))
+    cfg2 = dataclasses.replace(cfg, cutter_bin=wrapper)
+    req = export.check_request({"os": "windows", "root": "D:\\Videos\\Island 2026",
+                                "relink": json.dumps({"Day 2/ntsc 29.97.mov": "Day 2/renamed ntsc.mov"})}, ["cut1"])
+    zip_path = export.build(cfg2, paths, "Island 2026", req, "de")
+    z = zipfile.ZipFile(io.BytesIO(zip_path.read_bytes()))
+    zip_path.unlink()
+    xml_name = next(n for n in z.namelist() if n.endswith(".xml"))
+    root = ET.fromstring(z.read(xml_name))
+    files = {f.findtext("name"): f for f in root.iter("file") if f.find("pathurl") is not None}
+    tc = files["start timecode.mov"]
+    assert tc.findtext("pathurl") == "file://localhost/D:/Videos/Island%202026/Day%202/start%20timecode.mov"
+    assert tc.findtext("timecode/string") == "10:00:00:00"
+    assert tc.findtext("media/video/samplecharacteristics/width") == "1280"      # the original's, not 640
+    ntsc = files["renamed ntsc.mov"]
+    assert ntsc.findtext("pathurl").endswith("/Day%202/renamed%20ntsc.mov")
+    assert (ntsc.findtext("rate/timebase"), ntsc.findtext("rate/ntsc"), ntsc.findtext("timecode/displayformat")) == \
+        ("30", "TRUE", "DF")
+    assert not any("/projects/" in f.findtext("pathurl") for f in files.values())   # never the server's copies
+    assert "IMPORT-PREMIERE.txt" in z.namelist()

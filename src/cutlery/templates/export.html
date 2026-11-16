@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% set tab = 'export' %}
+{% block title %}{{ t('project.nav.export') }} – {{ project.name }}{% endblock %}
+{% block main %}
+{% include "_project_nav.html" %}
+{% set folder = project.footage_folder or project.name %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('export.title', cut=(cut or '–')) }}</h1>
+    <p>{{ t('export.lead') }}</p>
+  </div>
+  {% if cuts|length > 1 %}
+  <div class="actions">
+    <label for="cut" class="small">{{ t('export.cut') }}</label>
+    <select id="cut" form="export-form" name="cut">
+      {% for c in cuts|reverse %}<option value="{{ c }}" {% if c == cut %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+</div>
+
+{% if not cuts %}
+<div class="empty">{{ t('export.no_cut') }}</div>
+{% else %}
+<form id="export-form" method="post" action="/projects/{{ project.id }}/export" data-project="{{ project.id }}"
+      data-folder="{{ folder }}">
+  {% if cuts|length == 1 %}<input type="hidden" name="cut" value="{{ cut }}">{% endif %}
+  <input type="hidden" name="relink" id="relink" value="{}">
+
+  <section class="card">
+    <header><h2>{{ t('export.where.title') }}</h2></header>
+    <div class="stack">
+      <fieldset class="segmented">
+        <legend>{{ t('export.os') }}</legend>
+        {% for os in ('windows', 'macos', 'linux') %}
+        <label><input type="radio" name="os" value="{{ os }}" {% if loop.first %}checked{% endif %}>
+          <span>{{ t('export.os.' + os) }}</span></label>
+        {% endfor %}
+      </fieldset>
+      <div>
+        <label for="root">{{ t('export.root', folder=folder) }}</label>
+        <input type="text" id="root" name="root" class="mono" required autocomplete="off" spellcheck="false"
+               placeholder="{{ t('export.root.placeholder.windows', folder=folder) }}"
+               {% for os in ('windows', 'macos', 'linux') %}data-placeholder-{{ os }}="{{ t('export.root.placeholder.' + os, folder=folder) }}" {% endfor %}>
+        <p class="small muted">{{ t('export.root.hint') }}</p>
+        <div class="notice" id="root-mismatch" hidden></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header>
+      <h2>{{ t('export.check.title') }}</h2>
+      <div class="actions">
+        <label class="button" for="check-input">{{ t('export.check.pick') }}</label>
+        <input type="file" id="check-input" webkitdirectory multiple hidden>
+      </div>
+    </header>
+    <p class="small muted">{{ t('export.check.lead') }}</p>
+    <p class="small" id="check-progress" hidden></p>
+    <div class="check-counts" id="check-counts" hidden>
+      <div class="count ok"><strong id="n-found">0</strong><span>{{ t('export.check.found') }}</span></div>
+      <div class="count info"><strong id="n-renamed">0</strong><span>{{ t('export.check.renamed') }}</span></div>
+      <div class="count error"><strong id="n-missing">0</strong><span>{{ t('export.check.missing') }}</span></div>
+    </div>
+    <ul class="check-lines mono" id="check-lines"></ul>
+    <p class="small muted" id="check-skip">{{ t('export.check.skip') }}</p>
+  </section>
+
+  <section class="card">
+    <header><h2>{{ t('export.format.title') }}</h2></header>
+    <fieldset class="formats">
+      <legend class="visually-hidden">{{ t('export.format') }}</legend>
+      {% for f, spec in formats.items() %}
+      <label class="format{% if not spec.ready %} disabled{% endif %}">
+        <input type="radio" name="format" value="{{ f }}" {% if f == 'premiere' %}checked{% endif %} {% if not spec.ready %}disabled{% endif %}
+               data-label="{{ t('export.format.' + f) }}">
+        <span class="format-name">{{ t('export.format.' + f) }}{% if not spec.ready %} <span class="pill">{{ t('export.format.later') }}</span>{% endif %}</span>
+        <span class="small muted mono">{{ t('export.format.' + f + '.file') }}</span>
+        <span class="small"><strong>{{ t('export.format.included') }}</strong> {{ t('export.format.' + f + '.yes') }}</span>
+        <span class="small"><strong>{{ t('export.format.redo') }}</strong> {{ t('export.format.' + f + '.no') }}</span>
+      </label>
+      {% endfor %}
+    </fieldset>
+  </section>
+
+  <section class="card">
+    <header><h2>{{ t('export.download.title') }}</h2></header>
+    <div class="stack">
+      <p class="small">{{ t('export.download.hint') }}</p>
+      <div><button class="button primary" type="submit" id="download">{{ t('export.download.button', format=t('export.format.premiere')) }}</button></div>
+      <p class="small" id="download-status" hidden></p>
+      <div class="notice error" id="download-error" hidden></div>
+      <pre class="tree mono small" id="tree" data-originals="{{ t('export.tree.originals') }}"></pre>
+    </div>
+  </section>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if cuts %}<script type="module" src="/static/js/export.js"></script>{% endif %}
+{% endblock %}

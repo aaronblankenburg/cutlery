@@ -1,0 +1,7 @@
+<nav class="project-nav" aria-label="{{ project.name }}">
+  <a class="crumb" href="/">{{ t('nav.projects') }}</a><span class="muted">/</span><span class="crumb-current">{{ project.name }}</span>
+  <span class="tabs">
+    <a href="/projects/{{ project.id }}/footage" {% if tab == 'footage' %}aria-current="page"{% endif %}>{{ t('project.nav.footage') }}</a>
+    <a href="/projects/{{ project.id }}/export" {% if tab == 'export' %}aria-current="page"{% endif %}>{{ t('project.nav.export') }}</a>
+  </span>
+</nav>

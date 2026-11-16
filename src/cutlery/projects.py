@@ -66,6 +66,10 @@ class Projects:
             (self.cfg.work_dir / "uploads" / u["id"]).unlink(missing_ok=True)
         self.paths(project_id).remove()
 
+    def set_folder(self, project_id: str, name: str) -> None:
+        with self.db.tx() as con:
+            con.execute("UPDATE projects SET footage_folder=? WHERE id=?", (name, project_id))
+
     def touch(self, project_id: str) -> None:
         with self.db.tx() as con:
             con.execute("UPDATE projects SET updated=? WHERE id=?", (now(), project_id))

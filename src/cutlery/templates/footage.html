@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ project.name }}{% endblock %}
+{% set tab = 'footage' %}
 {% block main %}
+{% include "_project_nav.html" %}
 <div class="page-head">
   <div>
     <h1>{{ project.name }}</h1>

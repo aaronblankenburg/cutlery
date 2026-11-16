@@ -14,8 +14,25 @@ import sys
 import time
 import tomllib
 
+if sys.argv[1:2] == ["export"]:
+    # cutter export <cut> --to F --target-os OS --target-root ROOT --out DIR --relink FILE --json
+    args = dict(zip(sys.argv[3::2], sys.argv[4::2]))
+    if os.environ.get("FAKE_CUTTER_FAIL"):
+        print("Error: simulated export failure", file=sys.stderr)
+        sys.exit(1)
+    out = pathlib.Path(args["--out"])
+    (out / "music").mkdir(parents=True, exist_ok=True)
+    relink = json.loads(pathlib.Path(args["--relink"]).read_text())
+    (out / f"Film_{sys.argv[2]}.xml").write_text(json.dumps({"os": args["--target-os"], "root": args["--target-root"],
+                                                            "relink": relink}))
+    (out / "music" / "LICENSES.txt").write_text("english licences")
+    (out / "music" / "song.mp3").write_bytes(b"ID3")
+    print(json.dumps({"timeline": f"Film_{sys.argv[2]}.xml", "notes": [], "music": [
+        {"cue": "M1", "title": "Song", "artist": "Band", "license": "CC BY 4.0", "source": "https://example.org/song",
+         "file": "music/song.mp3"}]}))
+    sys.exit(0)
 if sys.argv[1:2] != ["analyze"]:
-    sys.exit("fake cutter: only analyze")
+    sys.exit("fake cutter: only analyze and export")
 if os.environ.get("FAKE_CUTTER_LOG"):
     with open(os.environ["FAKE_CUTTER_LOG"], "a") as f:
         f.write(f"{os.getcwd()} {os.environ.get('CUTTER_PROJECT')}\n")

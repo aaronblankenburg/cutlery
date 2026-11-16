@@ -12,7 +12,8 @@ from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response
+from starlette.background import BackgroundTask
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -20,6 +21,7 @@ from starlette.templating import Jinja2Templates
 from . import __version__, i18n
 from . import config as config_mod
 from . import cutter_project
+from . import export as export_mod
 from .analysis import AnalysisWorker
 from .auth import BasicAuthMiddleware
 from .db import Database
@@ -148,6 +150,46 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         p = project_or_404(request.path_params["pid"])
         return page(request, "footage.html", project=p)
 
+    async def export_page(request):
+        p = project_or_404(request.path_params["pid"])
+        cuts = await anyio.to_thread.run_sync(cutter_project.cuts, projects.paths(p["id"]))
+        return page(request, "export.html", project=p, cuts=cuts, cut=cuts[-1] if cuts else None,
+                    formats=export_mod.FORMATS)
+
+    async def export_download(request):
+        p = project_or_404(request.path_params["pid"])
+        form = await read_form(request)
+        lang = lang_of(request)
+        paths = projects.paths(p["id"])
+        cuts = await anyio.to_thread.run_sync(cutter_project.cuts, paths)
+        try:
+            req = export_mod.check_request(form, cuts)
+            zip_path = await anyio.to_thread.run_sync(export_mod.build, cfg, paths, p["name"], req, lang)
+        except export_mod.ExportError as e:
+            msg = i18n.translate(lang, e.key, message=str(e))
+            return JSONResponse({"error": str(e), "message": msg}, status_code=422)
+        name = f'{export_mod.safe_name(p["name"])}_{req["cut"]}_{req["format"]}.zip'
+        return FileResponse(zip_path, media_type="application/zip", filename=name,
+                            background=BackgroundTask(zip_path.unlink, missing_ok=True))
+
+    async def api_manifest(request):
+        p = project_or_404(request.path_params["pid"])
+        uploaded = {c["id"] for c in projects.clips(p["id"]) if c["state"] == "uploaded"}
+        try:
+            data = json.loads(projects.paths(p["id"]).manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {"clips": []}
+        return JSONResponse({"folder": p["footage_folder"], "clips": [c for c in data["clips"] if c["id"] in uploaded]})
+
+    async def api_folder(request):
+        p = project_or_404(request.path_params["pid"])
+        data = await read_json(request)
+        name = str(data.get("name") or "").strip()[:255]
+        if not name or "/" in name or "\\" in name:
+            raise HTTPException(422, "folder name expected")
+        await anyio.to_thread.run_sync(projects.set_folder, p["id"], name)
+        return JSONResponse({"ok": True})
+
     async def delete_project(request):
         p = project_or_404(request.path_params["pid"])
         form = await read_form(request)
@@ -255,12 +297,16 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/projects/new", new_project, methods=["GET", "POST"]),
         Route("/projects/{pid}/footage", footage),
         Route("/projects/{pid}/delete", delete_project, methods=["POST"]),
+        Route("/projects/{pid}/export", export_page),
+        Route("/projects/{pid}/export", export_download, methods=["POST"]),
         Route("/lang/{code}", set_language),
         Route("/i18n/{code}.json", catalog),
         Route("/api/status", api_status),
         Route("/api/projects/{pid}/analysis", api_analysis),
         Route("/api/projects/{pid}/analysis", api_analysis_start, methods=["POST"]),
         Route("/api/projects/{pid}/clips", api_clips, methods=["GET", "POST"]),
+        Route("/api/projects/{pid}/manifest", api_manifest),
+        Route("/api/projects/{pid}/folder", api_folder, methods=["POST"]),
         Route("/api/projects/{pid}/clips/{cid}/telemetry/{kind}", api_telemetry, methods=["PUT"]),
         Route("/healthz", healthz),
         *tus.routes(),
