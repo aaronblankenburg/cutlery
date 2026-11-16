@@ -207,10 +207,13 @@ def test_crash_and_max_turns_fail(env, monkeypatch):
     assert j["reason"] == "max_turns"
 
 
-def test_without_credentials_the_job_fails_with_a_clear_reason(env, monkeypatch):
+def test_without_credentials_the_job_waits_paused_and_resumes_once_one_is_set(env, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY")
-    j = env.wait(env.jobs.create(env.project(), "draft")["id"], "failed")
-    assert j["reason"] == "start" and "No Claude authentication" in j["message"]
+    j = env.wait(env.jobs.create(env.project(), "draft")["id"], "paused")
+    assert j["reason"] == "no_credential" and "No Claude authentication" in j["message"]
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+    env.jobs.resume(j["id"])
+    assert env.wait(j["id"], "done", "failed", "paused")["state"] == "done"
 
 
 def test_parallel_limit_and_cancel(env, monkeypatch):

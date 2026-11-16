@@ -28,7 +28,10 @@ class LocalExecutor:
         self.lock = threading.Lock()
 
     def start(self, spec) -> None:
-        auth = config_mod.claude_auth(self.base_env)           # exactly one credential, or a clear error
+        try:
+            auth = config_mod.claude_auth(self.base_env)       # exactly one credential, or a clear error
+        except config_mod.MissingAuth as e:
+            raise NoCredential(str(e))
         env = {k: v for k, v in self.base_env.items()
                if not k.startswith(("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"))}
         env.update(spec.get("env") or {})
@@ -86,6 +89,10 @@ class RunnerError(RuntimeError):
     pass
 
 
+class NoCredential(RuntimeError):
+    """No Claude credential is configured (the job pauses with reason "auth")."""
+
+
 class RunnerClient:
     """Talks to the runner over its Unix socket (a file in the work tree)."""
 
@@ -104,6 +111,8 @@ class RunnerClient:
         finally:
             conn.close()
         if r.status >= 400:
+            if data.get("reason") == "auth":
+                raise NoCredential(data.get("error") or "no Claude authentication is configured")
             raise RunnerError(data.get("error") or f"runner: HTTP {r.status}")
         return data
 

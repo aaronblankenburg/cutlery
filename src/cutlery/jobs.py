@@ -20,6 +20,7 @@ import threading
 import time
 
 from . import cutter_project, stream
+from .executor import NoCredential
 from .db import Database, now
 
 log = logging.getLogger("cutlery.jobs")
@@ -275,6 +276,10 @@ class Jobs:
         self._event(j["id"], {"kind": "start", "text": f"attempt {j['attempt']}, model {j['model']}"})
         try:
             self.executor.start(spec)
+        except NoCredential as e:
+            log.warning("job %s: paused, %s", j["id"], e)
+            self._finish(self.get(j["id"]), {"state": "paused", "reason": "no_credential", "message": str(e), "resume_after": None})
+            return
         except Exception as e:
             log.error("job %s: cannot start: %s", j["id"], e)
             self._finish(self.get(j["id"]), {"state": "failed", "reason": "start", "message": str(e), "resume_after": None})

@@ -78,7 +78,7 @@ class TestStorageCheck:
     def test_read_only_tree(self, cfg):
         os.chmod(cfg.models_dir, 0o500)
         try:
-            with pytest.raises(ConfigError, match="CUTLERY_MODELS_DIR: .* is not writable"):
+            with pytest.raises(ConfigError, match="CUTLERY_MODELS_DIR: .* is not writable.*chmod u\+rwx"):
                 check_trees(cfg)
         finally:
             os.chmod(cfg.models_dir, 0o700)

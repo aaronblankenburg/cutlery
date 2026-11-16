@@ -403,5 +403,8 @@
   "export.readme.filmcraft.title": "{title}, {cut} – in FilmCraft öffnen",
   "export.readme.filmcraft.steps": "1. {timeline} in FilmCraft öffnen (File → Open). Es ist das Projekt aus dem Review: Titel, Karte, Musik, Pegel, Stabilisierung und Untertitel sind enthalten.\n2. Das Projekt verweist auf deine Original-Clips und auf die Musik in diesem Ordner. Meldet FilmCraft fehlende Medien: „Relink Media“, den ersten fehlenden Clip in deinem Footage-Ordner wählen; FilmCraft findet die übrigen.\n3. {srt} liegt bei, falls du die Untertitel anderswo brauchst.\n4. Den Film aus FilmCraft exportieren.",
   "export.readme.filmcraft.not_included": "Alles aus dem Review ist enthalten.",
-  "export.readme.premiere.not_included": "Nicht enthalten und stattdessen als Marker auf der Sequenz gesetzt: Stabilisierung und Audio-Bereinigung einzelner Einstellungen sowie die Entscheidungen aus dem Review."
+  "export.readme.premiere.not_included": "Nicht enthalten und stattdessen als Marker auf der Sequenz gesetzt: Stabilisierung und Audio-Bereinigung einzelner Einstellungen sowie die Entscheidungen aus dem Review.",
+  "claude.missing": "Es ist noch kein Claude-Zugang eingerichtet: Upload und Analyse laufen, Fassungen warten. CLAUDE_CODE_OAUTH_TOKEN_FILE oder ANTHROPIC_API_KEY_FILE in der .env setzen und docker compose up -d ausführen.",
+  "jobs.paused.no_credential": "Wartet auf den Claude-Zugang: Auf dem Server ist weder Token noch API-Schlüssel eingerichtet. In der .env setzen, docker compose up -d ausführen, dann fortsetzen.",
+  "projects.paused_reason.no_credential": "auf dem Server ist noch kein Claude-Zugang eingerichtet."
 }

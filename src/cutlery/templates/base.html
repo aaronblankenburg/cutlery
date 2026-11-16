@@ -28,6 +28,7 @@
       {% endfor %}
     </div>
   </header>
+  {% if claude.missing %}<div class="banner warn" role="status">{{ t('claude.missing') }}</div>{% endif %}
   {% if claude.warn %}<div class="banner warn" role="status">{{ t('claude.token_warning', days=claude.days, date=claude.expires) }}</div>{% endif %}
   <main class="{% block main_class %}{% endblock %}">{% block main %}{% endblock %}</main>
   <footer class="site-footer">

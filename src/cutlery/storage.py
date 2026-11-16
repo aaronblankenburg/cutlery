@@ -40,8 +40,12 @@ def check_trees(cfg: Config) -> None:
                 pass
         except OSError:
             owner = path.stat().st_uid
-            problems.append(f"{var}: {path} is not writable by user {uid} (it belongs to user {owner}). "
-                            f"Fix it with: chown -R {uid} <host path>, or set PUID in .env to the owner.")
+            if owner == uid:
+                problems.append(f"{var}: {path} belongs to user {uid} but is not writable. "
+                                f"Fix it with: chmod u+rwx <host path> (and check that the disk is not mounted read-only).")
+            else:
+                problems.append(f"{var}: {path} is not writable by user {uid} (it belongs to user {owner}). "
+                                f"Fix it with: chown -R {uid} <host path>, or set PUID in .env to the owner.")
     if problems:
         raise ConfigError("Storage is not ready:\n  " + "\n  ".join(problems))
 

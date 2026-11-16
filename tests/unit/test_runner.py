@@ -132,3 +132,15 @@ def test_egress_proxy_refuses_what_is_not_allowed():
     finally:
         proxy.shutdown()
         upstream.close()
+
+
+def test_without_a_credential_the_runner_starts_and_claude_jobs_wait(cfg, monkeypatch):
+    monkeypatch.setattr(os, "stat", lambda p, *a, **k: os.stat_result((0o40755, 0, 0, 0, 1000, 1000, 0, 0, 0, 0)))
+    monkeypatch.setattr(runner_mod.config_mod, "_secret", lambda e, name: "")
+    r = Runner(cfg, FakeDocker({"/data": "/a", "/work": "/b", "/models": "/c"}), env={})
+    assert r.status()["kind"] is None and "No Claude authentication" in r.status()["auth_error"]
+    with pytest.raises(runner_mod.NoCredentialError):
+        r.start(spec())
+    assert not r.docker.calls                                          # nothing was started
+    r.start(spec(argv=["cutter", "analyze", "--json"], kind="analysis"))  # the analysis needs no credential
+    assert any(u.startswith("/containers/create") for _, u, _ in r.docker.calls)

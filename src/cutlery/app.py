@@ -109,11 +109,14 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         import time as _time
         if _time.monotonic() - claude_cache["t"] < 60:
             return claude_cache["info"]
-        info = {"kind": None, "warn": False, "expires": cfg.token_expires or None}
+        info = {"kind": None, "warn": False, "missing": False, "expires": cfg.token_expires or None}
         try:
             info["kind"] = (executor.status()["kind"] if cfg.executor == "runner" else config_mod.claude_auth().kind)
+            info["missing"] = info["kind"] is None
+        except config_mod.MissingAuth:
+            info["missing"] = True
         except Exception:
-            info["kind"] = None
+            info["kind"] = None                       # the runner does not answer: say nothing rather than guess
         if info["kind"] == "oauth" and cfg.token_expires:
             import datetime as _dt
             info["days"] = (_dt.date.fromisoformat(cfg.token_expires) - _dt.date.today()).days

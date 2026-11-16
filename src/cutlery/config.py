@@ -184,13 +184,17 @@ def _secret(env, name):
     return value
 
 
+class MissingAuth(ConfigError):
+    """Neither a token nor an API key is configured (two of them is a plain ConfigError)."""
+
+
 def claude_auth(env=None) -> ClaudeAuth:
     """Exactly one way to authenticate claude must be configured, otherwise this raises ConfigError."""
     env = os.environ if env is None else env
     found = {kind: _secret(env, var) for kind, var in AUTH_VARIABLES.items()}
     found = {k: v for k, v in found.items() if v}
     if not found:
-        raise ConfigError("No Claude authentication is configured. " + AUTH_HELP)
+        raise MissingAuth("No Claude authentication is configured. " + AUTH_HELP)
     if len(found) > 1:
         raise ConfigError("Both a Claude subscription token and an API key are configured. " + AUTH_HELP)
     kind, secret = next(iter(found.items()))

@@ -150,11 +150,21 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
 
 # ---------------------------------------------------------------- the runner
 
+class NoCredentialError(Exception):
+    """No Claude credential is configured; the job waits (paused) until one is."""
+
+
 class Runner:
     def __init__(self, cfg, docker: Docker | None = None, env=None):
         self.cfg, self.docker = cfg, docker or Docker()
         self.env = os.environ if env is None else env
-        self.auth = config_mod.claude_auth(self.env)            # exactly one, or refuse to start
+        # Exactly one credential. Without one the runner still starts (analysis works, the operator may add the
+        # token later); Claude Code jobs are refused with the reason, which pauses them until the next attempt.
+        try:
+            self.auth, self.auth_error = config_mod.claude_auth(self.env), None
+        except config_mod.MissingAuth as e:
+            self.auth, self.auth_error = None, str(e)
+            log.warning("cutlery runner: %s Claude Code jobs pause until it is set.", e)
         self.allow = tuple(x.strip() for x in (self.env.get("CUTLERY_EGRESS_ALLOW") or ",".join(DEFAULT_ALLOW)).split(",")
                            if x.strip())
         self.memory = int(float(self.env.get("CUTLERY_JOB_MEMORY_GB") or 8) * 1024 ** 3)
@@ -166,8 +176,8 @@ class Runner:
         for dest in ("/data", "/work", "/models"):
             if dest not in self.mounts:
                 raise RunnerConfigError(f"the runner needs {dest} mounted (see compose.yaml)")
-        self.secret_source = self.mounts.get(self._secret_path())
-        if not self.secret_source:
+        self.secret_source = self.mounts.get(self._secret_path()) if self.auth else None
+        if self.auth and not self.secret_source:
             raise RunnerConfigError(f"the credential file {self._secret_path()} must be a bind mount of a host file")
         self.user = self.env.get("CUTLERY_JOB_USER") or f"{os.stat('/data').st_uid}:{os.stat('/data').st_gid}"
         self.container_id = me["Id"]
@@ -266,6 +276,8 @@ class Runner:
 
     def start(self, spec: dict) -> None:
         s = self.check_spec(spec)
+        if s["kind"] == "claude" and self.auth is None:
+            raise NoCredentialError(self.auth_error)
         with self.lock:
             self.exits.pop(s["job"], None)          # a resumed job has the same id: forget the last attempt's exit
         name = f"cutlery-job-{s['job']}"
@@ -305,7 +317,8 @@ class Runner:
             pass
 
     def status(self) -> dict:
-        return {"kind": self.auth.kind, "egress": list(self.allow), "image": self.image[:19]}
+        return {"kind": self.auth.kind if self.auth else None, "auth_error": self.auth_error,
+                "egress": list(self.allow), "image": self.image[:19]}
 
 
 # ---------------------------------------------------------------- the API on the Unix socket
@@ -338,6 +351,8 @@ class _Api(http.server.BaseHTTPRequestHandler):
                 self.runner.stop(m.group(1))
                 return self._send(200, {"ok": True})
             return self._send(404, {"error": "not found"})
+        except NoCredentialError as e:
+            return self._send(409, {"error": str(e), "reason": "auth"})
         except ValueError as e:
             return self._send(400, {"error": str(e)})
         except Exception as e:
@@ -385,5 +400,6 @@ def serve(cfg) -> None:
         os.chown(path.parent, uid, gid)
     except (ValueError, OSError):
         pass
-    log.info("runner ready: %s, egress to %d hosts, Claude %s", path, len(runner.allow), runner.auth.kind)
+    log.info("runner ready: %s, egress to %d hosts, Claude %s", path, len(runner.allow),
+             runner.auth.kind if runner.auth else "not configured")
     server.serve_forever()
