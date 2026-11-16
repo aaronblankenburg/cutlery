@@ -17,14 +17,20 @@ The UI is available in English and German.
 
 - `PROMPT.md` – the build brief for Claude Code
 - `CLAUDE.md` – standing notes for Claude Code
-- `docs/design/` – the agreed GUI designs (logo and variants, Projects, New project, Status, Review, Export; drawn in German)
+- `docs/design/` – the agreed GUI designs (Logo, Projects, New project, Status, Review, Export; drawn in German).
+  `docs/design/rejected-logos/` keeps the discarded logo ideas for reference.
+- `docs/progress.md` – milestone log, kept up to date by Claude Code
 - `assets/` – logo (`logo.svg`, `favicon.svg`, `logo-mono.svg`): fork and knife beside a film reel instead of a plate
 
 ## Building it
 
-Open this folder in Claude Code, switch to Opus in plan mode, and say:
+1. Open this folder in Claude Code (version 2.x, logged in).
+2. Switch to Opus with `/model`, then press Shift+Tab until plan mode is on.
+3. Say:
 
-> Read PROMPT.md and present the plan.
+   > Read PROMPT.md and present the plan.
+
+Claude Code works milestone by milestone and tells you when a milestone needs a different model.
 
 ## Licence
 

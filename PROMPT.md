@@ -18,8 +18,9 @@ Before anything else, read these parts of cutter:
 
 Also read the GUI designs in docs/design/.
 
-Everything in the repository is written in English: code, comments, docs, commit messages. UI text
-lives in translation files (see "Languages and naming").
+Everything in the repository is written in English: identifiers, code comments, docstrings, log and
+error messages, docs, commit messages, issue and PR texts. The only non-English text allowed is UI
+text in translation files (see "Languages and naming").
 
 ## Audience
 
@@ -91,7 +92,9 @@ Cutlery is published under the MIT licence so that others can self-host it.
   | Job | Status |
   | Review | Review |
   | Export | Export |
-  | Logo, LogoVarianten | Logo and wordmarks (variant C, film strip, is the chosen logo) |
+  | Logo | The final logo and wordmark (also in assets/) |
+
+  docs/design/rejected-logos/ only documents discarded logo ideas; never use them.
 
   They are the binding template for layout, wording, colours, fonts (Space Grotesk, Inter,
   JetBrains Mono), spacing and states.

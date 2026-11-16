@@ -1,6 +1,8 @@
 .env
 *.token
 data/
+work/
+models/
 node_modules/
 __pycache__/
 *.pyc
