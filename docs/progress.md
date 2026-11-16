@@ -12,7 +12,7 @@ milestone (and before any model switch), so a fresh session can continue without
 | M4 – Claude Code jobs, non-interactive skill mode | done (2026-11-16) with a simulated claude; a run with a real Claude account is pending | cutter (main, 0.3.0): non-interactive skill mode, skill and docs in the image. Cutlery: briefing → briefing.md, job queue, `claude -p` with dontAsk + tool allowlist, stream-json → live log, pause on usage limit / auth with resume, webhook + MQTT, token expiry warning; runner service (Docker socket, isolated job containers, egress proxy with allowlist), analysis also through the runner. Tests: unit (fake claude), runner, stack test with Compose. |
 | M5 – review buttons, GUI, English and German UI | done (2026-11-16, on Opus 5.5 with the user's approval) | Pages after docs/design: projects (cards with stills, paused banner), new project (footage, briefing, files with music licences, readiness checklist; a draft can be queued early and waits for upload and analysis), status (steps, live job log, pause/resume, analysis facts, people naming, cuts), review on cutter's review API (comments, agent changes and assumptions, lock + next cut, export), analysis view (contact sheets, transcripts), error pages, phone layout. cutter 0.3.1 (local commit, not pushed): paths.review_media, decision kind in review data. |
 | M6 – FCPXML, Resolve and FilmCraft export | done (2026-11-16); round trips in the applications pending | cutter 0.4.0 (main ef866ce, not yet pushed): fcpxml.py (FCPXML 1.10, valid against Apple's DTD; stabilisation and noise reduction applied, captions, keyframes), `export --to fcp|resolve|filmcraft`, FilmCraft project built from an original-path timeline (offline on the server; round trip tested headless), stand-ins sized by their own picture in server timelines (fixes tiny review renders), FCP 7 file names no longer percent-encoded. Resolve gets FCPXML (decision in cutter docs/formats.md). Cutlery: all four formats on the export page, readme per application in en/de, tests, docs/nle-roundtrip.md. |
-| M7 – deployment, hardening, docs for self-hosters | next (Sonnet 5.5) | Before: push cutter 0.4.0, tag v0.4.0, pin the published image digest in Dockerfile. |
+| M7 – deployment, hardening, docs for self-hosters | done (2026-11-17, on Opus 5.5 with the user's approval) | CI: check (unit tests) and image (ghcr.io/aaronblankenburg/cutlery: `main`, `sha-…`; on v* tags also version and `latest`). compose hardening (no capabilities and no-new-privileges for the web app, log rotation), examples/ for nginx, Caddy and fail2ban (filter tested with fail2ban-regex), README for self-hosters (install in four commands, external disk, proxy, backup rule, updates, troubleshooting), tests/unit/test_deploy.py. Without a Claude credential the runner starts and cuts wait (paused, no_credential). Claude token can be entered under Settings (stored by the runner in CUTLERY_SECRETS_DIR only). Deployed for the user (see below). |
 
 ## State for the next session
 
@@ -65,7 +65,18 @@ milestone (and before any model switch), so a fresh session can continue without
 - The FilmCraft package has no title PNGs (FilmCraft makes titles natively); its rotation handling for portrait
   originals is untested (the server builds the project without the files).
 
+- Deployment of the user's own instance (2026-11-17): server nextcloud@192.168.0.223, repo in ~/cutlery, `.env` there
+  (mode 600) with the trees in /mnt/hdd/cutlery/{data,work,models,secrets}, CUTLERY_BIND=192.168.0.223:8080,
+  image `ghcr.io/aaronblankenburg/cutlery:main` (no release tag yet). Reverse proxy: nginx on pi@192.168.0.222,
+  /etc/nginx/sites-available/cutlery.aaronbb.com, Let's Encrypt via certbot; Pi-hole local DNS entry
+  cutlery.aaronbb.com -> 192.168.0.222 (backup /etc/pihole/pihole.toml.bak-cutlery). Docker's root on .223 is on
+  the small system disk (19 GB free after `docker image prune -a`); moving it to /mnt/hdd would be safer.
+  The initial login is in ~/cutlery/.initial-login on the server (mode 600); delete it once noted.
+- One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
+
 ## Open questions
+
+- Tag Cutlery v0.1.0 (then `latest` exists and the server can follow releases instead of `main`).
 
 - Round trips in Final Cut Pro, DaVinci Resolve and FilmCraft (docs/nle-roundtrip.md), besides Premiere.
 - Does Resolve keep volume/opacity keyframes and captions from FCPXML? If not, Resolve should get the FCP 7 XML.
