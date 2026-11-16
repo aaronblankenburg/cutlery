@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Projekt Island 2026 – Status</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#131417}
+a{color:#7DB3FF}a:hover{color:#A9CBFF}
+</style>
+</helmet>
+<div style="min-height: 1100px; background: #131417; color: #EDEEF0; font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.5">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding: 14px 32px; border-bottom: 1px solid #2C2F35; background: #16171A">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; color: #EDEEF0; text-decoration: none; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"></path></svg>
+      SchnippSchnapp
+    </a>
+    <nav aria-label="Projekt" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px">
+      <a href="Main.dc.html" style="padding: 8px 12px; border-radius: 8px; color: #A3A9B3; text-decoration: none; font-weight: 500">Projekte</a>
+      <span style="color: #5C626C" aria-hidden="true">/</span>
+      <span style="padding: 8px 4px; font-weight: 600">Island 2026</span>
+      <a href="Job.dc.html" style="margin-left: 12px; padding: 8px 12px; border-radius: 8px; background: #25282D; color: #EDEEF0; text-decoration: none; font-weight: 500">Status</a>
+      <a href="Review.dc.html" style="padding: 8px 12px; border-radius: 8px; color: #A3A9B3; text-decoration: none; font-weight: 500">Review</a>
+      <a href="Export.dc.html" style="padding: 8px 12px; border-radius: 8px; color: #A3A9B3; text-decoration: none; font-weight: 500">Export</a>
+    </nav>
+  </header>
+
+  <main style="max-width: 1240px; margin: 0 auto; padding: 36px 32px 72px; display: flex; flex-direction: column; gap: 24px">
+    <ol aria-label="Ablauf" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+      <li style="{{s.box}}">
+        <span style="font-size: 12px; color: #A3A9B3">{{s.n}}</span>
+        <span style="font-weight: 600">{{s.label}}</span>
+        <span style="font-size: 13px; color: #A3A9B3">{{s.note}}</span>
+      </li>
+      </sc-for>
+    </ol>
+
+    <sc-if value="{{paused}}" hint-placeholder-val="{{ false }}">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 16px 20px; border-radius: 12px; background: #2A2216; border: 1px solid #5A4520">
+      <span style="flex: 1 1 420px"><strong style="font-weight: 600">Pausiert: Nutzungslimit deines Claude-Kontos erreicht.</strong> Nichts ist verloren. Beim Fortsetzen startet eine neue Sitzung und arbeitet vom Stand der Projektdateien weiter. Wieder möglich ab etwa 18:40.</span>
+      <button type="button" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: none; background: {{accent}}; color: #131417; font-weight: 600; cursor: pointer">Fortsetzen</button>
+    </div>
+    </sc-if>
+
+    <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+      <section style="flex: 999 1 620px; min-width: 0; background: #1C1E22; border: 1px solid #2C2F35; border-radius: 14px; overflow: hidden">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid #2C2F35">
+          <div>
+            <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700">{{jobTitle}}</h1>
+            <p style="margin: 2px 0 0; color: #A3A9B3; font-size: 14px">Claude Code · gestartet 14:12 · läuft seit 38 min · Schritt: Edit-Plan</p>
+          </div>
+          <button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #3A3E46; background: transparent; color: #EDEEF0; font-weight: 500; cursor: pointer">Job abbrechen</button>
+        </div>
+        <div role="log" aria-label="Verlauf des Agenten" style="padding: 8px 0; font-size: 14px; max-height: 560px; overflow-y: auto">
+          <sc-for list="{{log}}" as="l" hint-placeholder-count="10">
+          <div style="display: flex; gap: 14px; padding: 8px 22px">
+            <span style="flex: none; width: 48px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8D939D; padding-top: 2px">{{l.t}}</span>
+            <span style="{{l.tag}}">{{l.kind}}</span>
+            <span style="min-width: 0">{{l.text}}</span>
+          </div>
+          </sc-for>
+        </div>
+        <details style="border-top: 1px solid #2C2F35; padding: 14px 22px; color: #A3A9B3; font-size: 14px">
+          <summary style="cursor: pointer; color: #EDEEF0">Rohprotokoll (stream-json) anzeigen</summary>
+          <p style="margin: 8px 0 0">Vollständige Ausgabe von claude -p, z. B. zum Nachvollziehen eines abgebrochenen Laufs.</p>
+        </details>
+      </section>
+
+      <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+        <section style="background: #1C1E22; border: 1px solid #2C2F35; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Analyse</h2>
+          <dl style="margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; font-size: 14px">
+            <div><dt style="color: #A3A9B3">Clips</dt><dd style="margin: 0; font-weight: 600">45 analysiert</dd></div>
+            <div><dt style="color: #A3A9B3">Sprache</dt><dd style="margin: 0; font-weight: 600">38 min transkribiert</dd></div>
+            <div><dt style="color: #A3A9B3">Brauchbar</dt><dd style="margin: 0; font-weight: 600">3 h 41 min</dd></div>
+            <div><dt style="color: #A3A9B3">Orte</dt><dd style="margin: 0; font-weight: 600">GPS in 29 Clips</dd></div>
+          </dl>
+          <a href="#" style="font-size: 14px">Contact Sheets und Transkripte ansehen</a>
+        </section>
+
+        <section style="background: #1C1E22; border: 1px solid #2C2F35; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px">
+            <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Personen</h2>
+            <span style="font-size: 13px; color: #A3A9B3">bleiben auf dem Server</span>
+          </div>
+          <p style="margin: 0; font-size: 14px; color: #A3A9B3">Namen helfen dem Agenten bei Untertiteln und Szenenwahl.</p>
+          <sc-for list="{{people}}" as="p" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 12px">
+            <span style="flex: none; width: 44px; height: 44px; border-radius: 22px; background: #2E3238; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #A3A9B3">{{p.id}}</span>
+            <label for="{{p.input}}" style="position: absolute; left: -9999px">Name für {{p.id}}</label>
+            <input id="{{p.input}}" type="text" value="{{p.name}}" placeholder="Name eingeben" style="flex: 1; min-width: 0; min-height: 40px; padding: 0 12px; border-radius: 8px; border: 1px solid #3A3E46; background: #131417; color: #EDEEF0">
+            <span style="flex: none; font-size: 12px; color: #A3A9B3">{{p.secs}}</span>
+          </div>
+          </sc-for>
+        </section>
+
+        <section style="background: #1C1E22; border: 1px solid #2C2F35; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Fassungen</h2>
+          <p style="margin: 0; font-size: 14px; color: #A3A9B3">Noch keine. Fassung 1 erscheint hier und im Review, sobald sie gerendert ist.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#F0A23B","options":["#F0A23B","#7DB3FF","#6CCB94"]},"paused":{"editor":"boolean","default":false},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const paused = this.props.paused ?? false;
+    const box = (bg, bd) => `display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:10px;background:${bg};border:1px solid ${bd}`;
+    const tag = (bg, fg) => `flex:none;align-self:flex-start;padding:1px 8px;border-radius:6px;font-size:12px;font-weight:600;background:${bg};color:${fg}`;
+    const tTool = tag('#25282D', '#C3C8D0'), tThink = tag('#1D2B40', '#9CC5FF'), tDec = tag('#33280F', '#F5C57E');
+    return {
+      accent: this.props.accent ?? '#F0A23B',
+      paused,
+      jobTitle: paused ? 'Fassung 1 · pausiert' : 'Fassung 1 wird geschnitten',
+      steps: [
+        { n: '1', label: 'Upload', note: '45 Clips · 1,9 GB', box: box('#16301F', '#24503A') },
+        { n: '2', label: 'Analyse', note: 'fertig', box: box('#16301F', '#24503A') },
+        { n: '3', label: 'Schnitt', note: paused ? 'pausiert' : 'läuft', box: box('#33280F', '#6A5022') },
+        { n: '4', label: 'Rendern', note: '720p-Vorschau', box: box('#1C1E22', '#2C2F35') },
+        { n: '5', label: 'Review', note: 'Fassung 1', box: box('#1C1E22', '#2C2F35') }
+      ],
+      log: [
+        { t: '14:12', kind: 'Start', text: 'Briefing und Storyboard gelesen, nicht-interaktiver Modus.', tag: tTool },
+        { t: '14:14', kind: 'Liest', text: 'transcript_all.txt und quality.txt (45 Clips).', tag: tTool },
+        { t: '14:21', kind: 'Sichtet', text: 'Contact Sheets C001–C045 und Übersichtsseiten 1–4.', tag: tTool },
+        { t: '14:33', kind: 'Plant', text: 'Fünf Abschnitte: Ankunft Keflavík · Süden · Gletscher · Ostfjorde · Fähre.', tag: tThink },
+        { t: '14:36', kind: 'Annahme', text: 'Kein Intro-Titel gewünscht → Titel über die erste Totale gelegt.', tag: tDec },
+        { t: '14:39', kind: 'Annahme', text: 'Personen P3 und P4 nicht benannt → im Film ohne Namen.', tag: tDec },
+        { t: '14:42', kind: 'Musik', text: 'Eigene Musik „nordlicht_demo.wav“ für Abschnitt 3, Rest CC BY gesucht.', tag: tTool },
+        { t: '14:47', kind: 'Befehl', text: 'cutter music license music/*', tag: tTool },
+        { t: '14:49', kind: 'Schreibt', text: 'cuts/cut1/edit.json (64 Einstellungen, 9:52 min).', tag: tTool },
+        { t: '14:50', kind: 'Befehl', text: 'cutter retime cut1', tag: tTool }
+      ],
+      people: [
+        { id: 'P1', input: 'p1', name: 'Aaron', secs: '412 s' },
+        { id: 'P2', input: 'p2', name: '', secs: '388 s' },
+        { id: 'P3', input: 'p3', name: '', secs: '41 s' },
+        { id: 'P4', input: 'p4', name: '', secs: '12 s' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
