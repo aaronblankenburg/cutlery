@@ -2,7 +2,7 @@
 
 Build **Cutlery** in this repository. Cutlery is an open-source, self-hosted web app. It lets one
 person cut films from their own video footage in the browser, without uploading the large original
-files. The German UI uses the name **SchnippSchnapp** (see "Languages and naming").
+files.
 
 Cutlery builds on cutter (https://github.com/aaronblankenburg/cutter, MIT). cutter provides footage
 analysis, an edit plan written by an AI agent using the video-editing skill, music with beat sync,
@@ -73,9 +73,8 @@ Cutlery is published under the MIT licence so that others can self-host it.
   adding one translation file, with no code changes.
 - The default language follows the browser (`Accept-Language`), falling back to English. A switch in
   the header changes it; the choice is remembered (cookie or localStorage).
-- The product name is part of the translation: "Cutlery" in English, "SchnippSchnapp" in German
-  (written exactly like that, with the wordmark "Schnipp" in the text colour and "Schnapp" in the
-  accent colour). Page titles, the wordmark in the header and the export README follow the language.
+- The product name is "Cutlery" in every language; it is never translated. The wordmark is "Cut" in the
+  text colour and "lery" in the accent colour.
 - The repository, image, package and CLI names are always `cutlery`.
 - Dates, numbers, file sizes and durations are formatted per locale.
 - The briefing the user writes stays in whatever language they write it in; the agent answers review

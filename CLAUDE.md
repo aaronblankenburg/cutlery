@@ -5,8 +5,8 @@
   running on another one, tell me and wait. Keep progress in docs/progress.md so a fresh session can continue.
 - Cutlery is open source (MIT) and meant for other self-hosters too: nothing may depend on my personal setup.
 - Everything in the repository is English (code, comments, docs, commits). UI text lives in translation files;
-  English and German ship from the start. The product is called "Cutlery" in English and "SchnippSchnapp" in
-  German. Repo, image, package and CLI names are always `cutlery`.
+  English and German ship from the start. The product is called "Cutlery" in every language (never translated).
+  Repo, image, package and CLI names are always `cutlery`.
 - I write to you in German; answer me in German.
 - GUI designs: docs/design/*.dc.html, drawn in German (template HTML: {{…}} holes, <sc-for>/<sc-if>, sample data
   in renderVals()). Take structure, wording and style from them, not the template syntax or the sample data.
@@ -17,5 +17,5 @@
 - Logo: assets/logo.svg – fork left, knife right, and in place of a plate a film reel (rotated 10°) with a strip of
   film running out of it, curving under the reel and snipped off at the end. favicon.svg is the same without the
   film strip (for 16–32 px); logo-mono.svg is single-colour (currentColor). docs/design/Logo.dc.html is the
-  reference; the other Logo*.dc.html boards show rejected alternatives only. Wordmarks: "Cut" + "lery" in the
-  accent colour; German "Schnipp" + "Schnapp" in the accent colour.
+  reference; the other Logo*.dc.html boards show rejected alternatives only. Wordmark: "Cut" + "lery" in the
+  accent colour.

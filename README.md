@@ -11,7 +11,7 @@ on it frame by frame; Claude Code cuts the next version. When you're happy, you 
 Premiere Pro, Final Cut Pro, DaVinci Resolve or FilmCraft that links straight to the original files on your
 computer, and render the final film there.
 
-The UI is available in English and German (where it's called *SchnippSchnapp*).
+The UI is available in English and German.
 
 **Status:** planning. Nothing is built yet.
 
