@@ -55,6 +55,7 @@ def test_only_the_runner_has_the_socket_and_the_credential(compose):
     targets = lambda svc: {v["target"] for v in svc.get("volumes", [])}
     assert "/var/run/docker.sock" not in targets(web) and "/var/run/docker.sock" in targets(runner)
     assert not any(t.startswith("/run/secrets") for t in targets(web))
+    assert "/secrets" in targets(runner) and "/secrets" not in targets(web)     # tokens entered in the web UI
     assert not any(k in web["environment"] for k in ("CLAUDE_CODE_OAUTH_TOKEN_FILE", "ANTHROPIC_API_KEY_FILE"))
     assert web["cap_drop"] == ["ALL"]
     assert web["ports"][0]["host_ip"] == "127.0.0.1"

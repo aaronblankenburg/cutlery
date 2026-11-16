@@ -1,3 +1,4 @@
+import json
 import os
 import socket
 import threading
@@ -144,3 +145,56 @@ def test_without_a_credential_the_runner_starts_and_claude_jobs_wait(cfg, monkey
     assert not r.docker.calls                                          # nothing was started
     r.start(spec(argv=["cutter", "analyze", "--json"], kind="analysis"))  # the analysis needs no credential
     assert any(u.startswith("/containers/create") for _, u, _ in r.docker.calls)
+
+
+TOKEN = "sk-ant-oat01-" + "A1b2_C3d4-" * 8
+
+
+@pytest.fixture
+def bare_runner(cfg, monkeypatch, tmp_path):
+    """A runner without a credential in .env, with CUTLERY_SECRETS_DIR mounted (host path /srv/cutlery/secrets)."""
+    real = os.stat
+    monkeypatch.setattr(os, "stat", lambda p, *a, **k: os.stat_result((0o40755, 0, 0, 0, 1000, 1000, 0, 0, 0, 0))
+                        if str(p) == "/data" else real(p, *a, **k))
+    monkeypatch.setattr(runner_mod.config_mod, "_secret", lambda e, name: "")
+    monkeypatch.setattr(os, "chown", lambda *a: None)
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    monkeypatch.setattr(runner_mod, "SECRETS", str(secrets))
+    mounts = {"/data": "/a", "/work": "/b", "/models": "/c", str(secrets): "/srv/cutlery/secrets"}
+    return Runner(cfg, FakeDocker(mounts), env={}), secrets
+
+
+def test_a_token_entered_in_the_web_ui_is_stored_for_the_jobs_only(bare_runner):
+    r, secrets = bare_runner
+    assert r.status()["can_store"] and r.status()["source"] is None
+    r.set_token(TOKEN)
+    f = secrets / runner_mod.STORED_TOKEN
+    assert f.read_text().strip() == TOKEN and (f.stat().st_mode & 0o777) == 0o600
+    st = r.status()
+    assert (st["kind"], st["source"]) == ("oauth", "stored") and st["stored"] and st["expires"] > st["stored"]
+    assert TOKEN not in json.dumps(st)                                 # never sent back
+    c = r.container_spec(r.check_spec(spec()))
+    assert f"/srv/cutlery/secrets/{runner_mod.STORED_TOKEN}:/run/secrets/claude:ro" in c["HostConfig"]["Binds"]
+    assert dict(e.split("=", 1) for e in c["Env"])["CUTLERY_SECRET_VAR"] == "CLAUDE_CODE_OAUTH_TOKEN"
+    # a restarted runner finds it again
+    again = Runner(r.cfg, FakeDocker(r.docker.mounts), env={})
+    assert again.status()["source"] == "stored"
+    r.clear_token()
+    assert not f.exists() and r.status()["kind"] is None
+    with pytest.raises(runner_mod.NoCredentialError):
+        r.start(spec())
+
+
+@pytest.mark.parametrize("bad", ["", "hello", "sk-ant-short", "sk-ant-oat01-" + "x" * 30 + "\nrm -rf /", TOKEN + " "  + TOKEN])
+def test_only_claude_tokens_are_stored(bare_runner, bad):
+    r, secrets = bare_runner
+    with pytest.raises(ValueError):
+        r.set_token(bad)
+    assert not any(secrets.iterdir())
+
+
+def test_a_credential_in_env_wins_and_cannot_be_changed_from_the_web_ui(runner):
+    assert runner.status()["source"] == "env" and not runner.status()["can_store"]
+    with pytest.raises(ValueError, match=".env"):
+        runner.set_token(TOKEN)

@@ -47,6 +47,10 @@ DEFAULT_ALLOW = ("api.anthropic.com",
                  "huggingface.co", "*.huggingface.co", "*.hf.co")
 ENV_KEYS = ("CUTTER_PROJECT", "TMPDIR", "CLAUDE_CONFIG_DIR", "HOME")
 SECRET_IN_JOB = "/run/secrets/claude"
+SECRETS = "/secrets"                          # CUTLERY_SECRETS_DIR: only the runner mounts it
+STORED_TOKEN = "claude-oauth-token"           # a subscription token entered in the web UI
+TOKEN_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{20,400}")
+TOKEN_DAYS = 365                              # `claude setup-token` makes tokens valid for a year
 JOB_ID = re.compile(r"^[0-9a-f]{8,32}$")
 PROJECT_ID = re.compile(r"^[0-9a-f]{6,32}$")
 
@@ -160,11 +164,12 @@ class Runner:
         self.env = os.environ if env is None else env
         # Exactly one credential. Without one the runner still starts (analysis works, the operator may add the
         # token later); Claude Code jobs are refused with the reason, which pauses them until the next attempt.
+        # A token entered in the web UI (stored in CUTLERY_SECRETS_DIR) counts when .env has none.
+        self.source = None
         try:
-            self.auth, self.auth_error = config_mod.claude_auth(self.env), None
+            self.auth, self.auth_error, self.source = config_mod.claude_auth(self.env), None, "env"
         except config_mod.MissingAuth as e:
             self.auth, self.auth_error = None, str(e)
-            log.warning("cutlery runner: %s Claude Code jobs pause until it is set.", e)
         self.allow = tuple(x.strip() for x in (self.env.get("CUTLERY_EGRESS_ALLOW") or ",".join(DEFAULT_ALLOW)).split(",")
                            if x.strip())
         self.memory = int(float(self.env.get("CUTLERY_JOB_MEMORY_GB") or 8) * 1024 ** 3)
@@ -179,8 +184,77 @@ class Runner:
         self.secret_source = self.mounts.get(self._secret_path()) if self.auth else None
         if self.auth and not self.secret_source:
             raise RunnerConfigError(f"the credential file {self._secret_path()} must be a bind mount of a host file")
+        if self.auth is None:
+            self._load_stored()
+        if self.auth is None:
+            log.warning("cutlery runner: %s Or enter a token in the web UI (Settings). Claude Code jobs pause until "
+                        "then.", self.auth_error)
         self.user = self.env.get("CUTLERY_JOB_USER") or f"{os.stat('/data').st_uid}:{os.stat('/data').st_gid}"
         self.container_id = me["Id"]
+
+    # ------------------------------------------------------------ a token entered in the web UI
+
+    def _stored(self) -> pathlib.Path | None:
+        return pathlib.Path(SECRETS) / STORED_TOKEN if SECRETS in self.mounts else None
+
+    def _load_stored(self) -> None:
+        f = self._stored()
+        if f is None or not f.is_file():
+            return
+        token = f.read_text().strip()
+        if not TOKEN_RE.fullmatch(token):
+            log.warning("cutlery runner: the stored token in %s is not a Claude token; ignored", f)
+            return
+        self.auth = config_mod.ClaudeAuth("oauth", config_mod.AUTH_VARIABLES["oauth"], token)
+        self.auth_error, self.source = None, "stored"
+        self.secret_source = f"{self.mounts[SECRETS].rstrip('/')}/{STORED_TOKEN}"
+
+    def stored_info(self) -> dict:
+        f = self._stored()
+        try:
+            meta = json.loads(f.with_suffix(".json").read_text()) if f else {}
+        except (OSError, ValueError):
+            meta = {}
+        return {"stored": meta.get("stored"), "expires": meta.get("expires")}
+
+    def set_token(self, token: str) -> None:
+        token = (token or "").strip()
+        if self.source == "env":
+            raise ValueError("the Claude access is set in .env; remove it there to enter a token here")
+        if self._stored() is None:
+            raise ValueError("CUTLERY_SECRETS_DIR is not mounted into the runner (see compose.yaml)")
+        if not TOKEN_RE.fullmatch(token):
+            raise ValueError("this is not a Claude token (it starts with sk-ant-; create one with claude setup-token)")
+        import datetime
+        f = self._stored()
+        uid, gid = (int(x) for x in self.user.split(":"))
+        today = datetime.date.today()
+        meta = {"stored": today.isoformat(), "expires": (today + datetime.timedelta(days=TOKEN_DAYS)).isoformat()}
+        with self.lock:
+            for path, text in ((f, token + "\n"), (f.with_suffix(".json"), json.dumps(meta) + "\n")):
+                tmp = path.with_name(path.name + ".tmp")
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w") as fh:
+                    fh.write(text)
+                try:
+                    os.chown(tmp, uid, gid)          # the job reads it as PUID; the web app never mounts this folder
+                except PermissionError:
+                    pass
+                os.replace(tmp, path)
+            self.source = None
+            self._load_stored()
+        log.info("cutlery runner: a Claude token was entered in the web UI")
+
+    def clear_token(self) -> None:
+        if self.source != "stored":
+            raise ValueError("no token entered in the web UI is in use")
+        with self.lock:
+            f = self._stored()
+            f.unlink(missing_ok=True)
+            f.with_suffix(".json").unlink(missing_ok=True)
+            self.auth, self.source, self.secret_source = None, None, None
+            self.auth_error = "No Claude authentication is configured. " + config_mod.AUTH_HELP
+        log.info("cutlery runner: the Claude token of the web UI was removed")
 
     def _secret_path(self) -> str:
         name = self.auth.variable + "_FILE"
@@ -317,7 +391,9 @@ class Runner:
             pass
 
     def status(self) -> dict:
-        return {"kind": self.auth.kind if self.auth else None, "auth_error": self.auth_error,
+        return {"kind": self.auth.kind if self.auth else None, "auth_error": self.auth_error, "source": self.source,
+                "can_store": self._stored() is not None and self.source != "env",
+                **(self.stored_info() if self.source == "stored" else {}),
                 "egress": list(self.allow), "image": self.image[:19]}
 
 
@@ -338,6 +414,15 @@ class _Api(http.server.BaseHTTPRequestHandler):
         try:
             if method == "GET" and self.path == "/status":
                 return self._send(200, self.runner.status())
+            if self.path == "/credential" and method in ("PUT", "DELETE"):
+                if method == "DELETE":
+                    self.runner.clear_token()
+                    return self._send(200, {"ok": True})
+                n = int(self.headers.get("content-length") or 0)
+                if n > 8 * 1024:
+                    return self._send(413, {"error": "request too large"})
+                self.runner.set_token(str(json.loads(self.rfile.read(n)).get("token", "")))
+                return self._send(200, {"ok": True})
             if method == "POST" and self.path == "/jobs":
                 n = int(self.headers.get("content-length") or 0)
                 if n > 256 * 1024:
@@ -367,6 +452,9 @@ class _Api(http.server.BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         self._route("DELETE")
+
+    def do_PUT(self):
+        self._route("PUT")
 
     def log_message(self, fmt, *args):
         log.debug(fmt, *args)

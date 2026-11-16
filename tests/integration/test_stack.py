@@ -29,7 +29,7 @@ def stack(tmp_path_factory):
     if not IMAGE or not shutil.which("docker"):
         pytest.skip("set CUTLERY_TEST_STACK_IMAGE (an image with the simulated claude) to run the stack tests")
     d = tmp_path_factory.mktemp("stack")
-    for sub in ("data", "work", "models", "secrets"):
+    for sub in ("data", "work", "models", "secrets", "stored"):
         (d / sub).mkdir()
     key = d / "secrets" / "key"
     key.write_text("sk-ant-api-test-only")
@@ -37,7 +37,7 @@ def stack(tmp_path_factory):
     env = d / ".env"
     env.write_text("\n".join([
         f"CUTLERY_IMAGE={IMAGE}", f"CUTLERY_DATA_DIR={d / 'data'}", f"CUTLERY_WORK_DIR={d / 'work'}",
-        f"CUTLERY_MODELS_DIR={d / 'models'}", f"PUID={os.getuid()}", f"PGID={os.getgid()}", f"CUTLERY_PORT={PORT}",
+        f"CUTLERY_MODELS_DIR={d / 'models'}", f"CUTLERY_SECRETS_DIR={d / 'stored'}", f"PUID={os.getuid()}", f"PGID={os.getgid()}", f"CUTLERY_PORT={PORT}",
         f"ANTHROPIC_API_KEY_FILE={key}", "CUTLERY_ANALYSIS_SETTLE_SECONDS=1", ""]))
     dc = ["docker", "compose", "--env-file", str(env), "-p", "cutlery-test-stack", "-f", str(ROOT / "compose.yaml")]
     pw = subprocess.run(dc + ["run", "--rm", "-T", "cutlery", "set-password", "--generate"], capture_output=True,
@@ -95,7 +95,7 @@ def project(s, name, scenario):
     fp = {"size": 1000, "head_sha256": hashlib.sha256(pid.encode()).hexdigest(), "tail_sha256": "b" * 64}
     status, body, _ = call(s, "POST", f"/api/projects/{pid}/clips", variant(size=1000, fingerprint=fp))
     cid = json.loads(body)["id"]
-    subprocess.run(["docker", "exec", "cutlery-test-stack-cutlery-1", "python", "-c",
+    subprocess.run(["docker", "exec", s.get("web", "cutlery-test-stack-cutlery-1"), "python", "-c",
                     "from cutlery import config as c; from cutlery.db import Database; from cutlery.projects import Projects;"
                     f"cfg = c.load(); Projects(cfg, Database(cfg.database)).mark({pid!r}, {cid!r}, 'uploaded')"], check=True)
     a = s["dir"] / "work" / "projects" / pid / "analysis"

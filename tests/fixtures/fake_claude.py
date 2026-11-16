@@ -84,7 +84,7 @@ if scenario == "probe":
 
     facts = {"uid": os.getuid(), "gid": os.getgid(), "secret_var": sorted(k for k in os.environ if k in (
                  "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN")),
-             "secret_len": len(os.environ.get("ANTHROPIC_API_KEY", "")),
+             "secret_len": len(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or ""),
              "projects_seen": sorted(os.listdir("/data/projects")), "docker_sock": os.path.exists("/var/run/docker.sock"),
              "root_writable": writable("/usr"), "project_writable": writable("."),
              "models_writable": writable("/models"), "direct_internet": connect("1.1.1.1", 443),

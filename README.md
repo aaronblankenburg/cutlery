@@ -29,34 +29,33 @@ The UI is available in English and German. One instance has one user.
 
 ```sh
 git clone https://github.com/aaronblankenburg/cutlery.git && cd cutlery
-cp .env.example .env && nano .env          # storage paths, PUID/PGID, Claude token or key file
+cp .env.example .env && nano .env          # storage paths, PUID/PGID, port
 docker compose run --rm --no-deps cutlery set-password
 docker compose up -d
 ```
 
-Then open <http://127.0.0.1:8080> (or your domain) and log in as `cutlery` with the password you set.
+Then open <http://127.0.0.1:8080> (or your domain), log in as `cutlery` with the password you set, and enter your
+Claude token under **Settings**.
 
 What to set in `.env`:
 
-1. **Storage.** Three directories on the host (see [Storage and backup](#storage-and-backup)). Create them and
+1. **Storage.** Four directories on the host (see [Storage and backup](#storage-and-backup)). Create them and
    make them yours before the first start; Cutlery refuses to start with a clear message if one is missing or not
    writable, instead of letting Docker create empty directories owned by root:
 
    ```sh
-   mkdir -p data work models
+   mkdir -p data work models secrets && chmod 700 secrets
    ```
 
 2. **`PUID` and `PGID`**: your user and group (`id -u`, `id -g`). Everything Cutlery writes belongs to them.
-3. **Claude**: exactly one of `CLAUDE_CODE_OAUTH_TOKEN_FILE` or `ANTHROPIC_API_KEY_FILE`, each the path of a file
-   that contains only the token or key:
+3. **Claude** – the easiest way needs nothing in `.env`: run `claude setup-token` on any computer with Claude Code
+   and paste the token under **Settings** in Cutlery. It goes straight to the runner service, is stored in
+   `CUTLERY_SECRETS_DIR` (mode 600, mounted into no other service) and is never shown again; Cutlery warns 30 days
+   before it expires (tokens are valid for a year). Until a token is set, uploads and the analysis work and cuts wait.
 
-   ```sh
-   mkdir -p ~/.config/cutlery && chmod 700 ~/.config/cutlery
-   claude setup-token        # on any computer with Claude Code; paste the token into the file below
-   nano ~/.config/cutlery/claude-oauth-token && chmod 600 ~/.config/cutlery/claude-oauth-token
-   ```
-
-   A subscription token is valid for a year; set `CUTLERY_CLAUDE_TOKEN_EXPIRES` and Cutlery warns 30 days before.
+   Alternatively set exactly one of `CLAUDE_CODE_OAUTH_TOKEN_FILE` or `ANTHROPIC_API_KEY_FILE` in `.env`, each the
+   path of a file that contains only the token or key (mode 600). An API key from the Claude Console is required if
+   other people use your instance; a setting in `.env` takes precedence over the web UI.
 4. Optional: models per job, time zone, notifications (webhook or MQTT) when a cut is ready or a job pauses.
    `.env.example` explains every setting.
 
@@ -65,13 +64,15 @@ What to set in `.env`:
 On a home server with an external disk mounted at `/mnt/hdd`:
 
 ```sh
-sudo mkdir -p /mnt/hdd/cutlery/{data,work,models} && sudo chown -R "$(id -u):$(id -g)" /mnt/hdd/cutlery
+sudo mkdir -p /mnt/hdd/cutlery/{data,work,models,secrets} && sudo chown -R "$(id -u):$(id -g)" /mnt/hdd/cutlery
+chmod 700 /mnt/hdd/cutlery/secrets
 ```
 
 ```ini
 CUTLERY_DATA_DIR=/mnt/hdd/cutlery/data
 CUTLERY_WORK_DIR=/mnt/hdd/cutlery/work
 CUTLERY_MODELS_DIR=/mnt/hdd/cutlery/models
+CUTLERY_SECRETS_DIR=/mnt/hdd/cutlery/secrets
 ```
 
 If the disk is not mounted when Docker starts, Cutlery stops with a message naming the missing directory rather
@@ -97,7 +98,8 @@ Two services from one image (`ghcr.io/aaronblankenburg/cutlery`):
 
 - **cutlery** – the web app, uploads, analysis queue and job queue. It has neither the Docker socket nor the
   Claude credential, runs as `PUID:PGID` without capabilities.
-- **runner** – the only service with the Docker socket and the credential file. For each Claude Code job and each
+- **runner** – the only service with the Docker socket and the Claude credential (`CUTLERY_SECRETS_DIR` or the
+  file named in `.env`). For each Claude Code job and each
   analysis it starts a fresh container from the same image that sees only that one project (plus the models,
   read-only for Claude Code jobs), runs as `PUID:PGID` with a read-only root file system, no capabilities, limited
   memory and processes, and has no network except an HTTPS proxy that lets through `api.anthropic.com`, a few
@@ -120,6 +122,7 @@ continue. Continuing starts a new Claude Code session that picks up from the fil
 | `CUTLERY_DATA_DIR` | database (projects, jobs, password hash), per project: briefing, storyboard, images, music with licences, clip metadata and manifest, edit lists and decisions of every cut, review comments | **back this up** |
 | `CUTLERY_WORK_DIR` | 360p copies, analysis (transcripts, contact sheets, faces), review renders, FilmCraft working files, temporary files of jobs and exports | can be regenerated; exclude it (for example a separate btrfs subvolume or an exclude rule) |
 | `CUTLERY_MODELS_DIR` | speech and detection models, shared by all projects | downloaded again when missing |
+| `CUTLERY_SECRETS_DIR` | the Claude token entered under Settings | optional; a new token can be entered any time |
 
 Each tree has the same layout per project, `<dir>/projects/<project-id>/…`. If you lose `CUTLERY_WORK_DIR`, open
 the project and pick the footage folder again: the browser makes the 360p copies again, the analysis runs again,
@@ -144,9 +147,10 @@ in `.env`.
 |---|---|
 | The container exits: "… does not exist" or "… is not writable" | Create the directory and `chown` it to `PUID:PGID`; check that the disk is mounted. |
 | "No password is set" in the browser | `docker compose run --rm --no-deps cutlery set-password` |
-| The runner restarts: "No Claude authentication is configured" | Set exactly one of the two `_FILE` variables; the file must be readable. |
+| Cuts wait: "Waiting for Claude access" | Enter a token under Settings, then resume the cut. |
+| The runner restarts: "Both a Claude subscription token and an API key are configured" | Keep only one of the two `_FILE` variables in `.env`. |
 | "Too many failed logins" | Wait 15 minutes, or `docker compose restart cutlery`. |
-| A job is paused | Usage limit or expired login; the project page says which. Renew the token with `claude setup-token`, then continue. |
+| A job is paused | Usage limit or expired login; the project page says which. Create a new token with `claude setup-token`, enter it under Settings, then continue. |
 | Uploads stop behind the proxy | Body size limit (needs ≥ 8 MiB) or timeouts of the reverse proxy; compare with the examples. |
 | Little free space | The footer of every page shows the free space per tree and warns below `CUTLERY_DISK_WARN_GB`. Delete finished projects or move `CUTLERY_WORK_DIR` to a larger disk (it can be regenerated). |
 

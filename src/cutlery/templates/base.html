@@ -14,6 +14,7 @@
     <nav class="site-nav" aria-label="{{ t('nav.label') }}">
       <a href="/" {% if nav == 'projects' %}aria-current="page"{% endif %}>{{ t('nav.projects') }}</a>
       <a href="/projects/new" {% if nav == 'new' %}aria-current="page"{% endif %}>{{ t('nav.new_project') }}</a>
+      <a href="/settings" {% if nav == 'settings' %}aria-current="page"{% endif %}>{{ t('nav.settings') }}</a>
     </nav>
     <div class="header-status small">
       {% if claude.kind == 'oauth' %}<span class="{% if claude.warn %}warn{% endif %}">{{ t('header.claude_oauth', date=claude.expires) if claude.expires else t('header.claude_oauth_nodate') }}</span>

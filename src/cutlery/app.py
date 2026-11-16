@@ -110,16 +110,22 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         if _time.monotonic() - claude_cache["t"] < 60:
             return claude_cache["info"]
         info = {"kind": None, "warn": False, "missing": False, "expires": cfg.token_expires or None}
+        status = {}
         try:
-            info["kind"] = (executor.status()["kind"] if cfg.executor == "runner" else config_mod.claude_auth().kind)
+            if cfg.executor == "runner":
+                status = executor.status()
+                info["kind"] = status["kind"]
+            else:
+                info["kind"] = config_mod.claude_auth().kind
             info["missing"] = info["kind"] is None
         except config_mod.MissingAuth:
             info["missing"] = True
         except Exception:
             info["kind"] = None                       # the runner does not answer: say nothing rather than guess
-        if info["kind"] == "oauth" and cfg.token_expires:
+        info["expires"] = cfg.token_expires or status.get("expires") or None
+        if info["kind"] == "oauth" and info["expires"]:
             import datetime as _dt
-            info["days"] = (_dt.date.fromisoformat(cfg.token_expires) - _dt.date.today()).days
+            info["days"] = (_dt.date.fromisoformat(info["expires"]) - _dt.date.today()).days
             info["warn"] = info["days"] < 30
         claude_cache.update(t=_time.monotonic(), info=info)
         return info
@@ -326,6 +332,34 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
             info.update(days_left=days, warn=days < 30)
         return JSONResponse(info)
 
+    async def settings_page(request):
+        info = {"kind": None, "source": None, "can_store": False}
+        if cfg.executor == "runner":
+            try:
+                info.update(await anyio.to_thread.run_sync(executor.status))
+            except RunnerError as e:
+                info["error"] = str(e)
+        else:
+            info["error"] = "runner"
+        return page(request, "settings.html", nav="settings", access=info,
+                    expires=cfg.token_expires or info.get("expires"))
+
+    async def api_claude_token(request):
+        """Enter or remove the subscription token. It goes straight to the runner and is never sent back."""
+        if cfg.executor != "runner":
+            raise HTTPException(409, "tokens can be entered only with the runner service")
+        try:
+            if request.method == "DELETE":
+                await anyio.to_thread.run_sync(executor.clear_token)
+            else:
+                data = await read_json(request)
+                await anyio.to_thread.run_sync(executor.set_token, str(data.get("token", "")))
+        except RunnerError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        claude_cache["t"] = float("-inf")                  # the header shows the new state at once
+        log.info("Claude token %s in the web UI", "removed" if request.method == "DELETE" else "entered")
+        return JSONResponse({"ok": True})
+
     async def delete_project(request):
         p = project_or_404(request.path_params["pid"])
         form = await read_form(request)
@@ -467,6 +501,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/jobs/{jid}/raw", api_job_raw),
         Route("/api/jobs/{jid}/{action}", api_job_action, methods=["POST"]),
         Route("/api/claude", api_claude),
+        Route("/api/claude/token", api_claude_token, methods=["PUT", "DELETE"]),
+        Route("/settings", settings_page),
         Route("/api/projects/{pid}/folder", api_folder, methods=["POST"]),
         Route("/api/projects/{pid}/clips/{cid}/telemetry/{kind}", api_telemetry, methods=["PUT"]),
         Route("/healthz", healthz),

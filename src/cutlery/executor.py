@@ -122,6 +122,12 @@ class RunnerClient:
     def start(self, spec) -> None:
         self._call("POST", "/jobs", spec)
 
+    def set_token(self, token: str) -> None:
+        self._call("PUT", "/credential", {"token": token})
+
+    def clear_token(self) -> None:
+        self._call("DELETE", "/credential")
+
     def poll(self, job) -> int | None:
         r = self._call("GET", f"/jobs/{job}")
         return None if r.get("running") else int(r.get("exit_code", -1))

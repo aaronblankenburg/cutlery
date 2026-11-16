@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ t('settings.title') }}{% endblock %}
+{% block main %}
+<div class="page-head">
+  <div>
+    <h1 class="display">{{ t('settings.title') }}</h1>
+    <p>{{ t('settings.lead') }}</p>
+  </div>
+</div>
+
+<section class="card stack narrow" id="claude-access">
+  <header><h2>{{ t('settings.claude.title') }}</h2></header>
+  <p class="small" id="access-state">
+    {% if access.error %}{{ t('settings.claude.runner_down') }}
+    {% elif access.source == 'env' and access.kind == 'api_key' %}{{ t('settings.claude.from_env_api_key') }}
+    {% elif access.source == 'env' %}{{ t('settings.claude.from_env_oauth') }}
+    {% elif access.source == 'stored' %}{{ t('settings.claude.stored', stored=access.stored or '–', expires=expires or '–') }}
+    {% else %}{{ t('settings.claude.none') }}{% endif %}
+  </p>
+  {% if access.can_store %}
+  <form class="stack" id="token-form" autocomplete="off">
+    <div>
+      <label for="token">{{ t('settings.claude.token') }}</label>
+      <input type="password" id="token" name="token" autocomplete="new-password" spellcheck="false" required
+             placeholder="{{ t('settings.claude.placeholder_set') if access.source == 'stored' else 'sk-ant-oat01-…' }}">
+      <p class="small muted">{{ t('settings.claude.hint') }}</p>
+    </div>
+    <div class="row">
+      <button class="button primary" type="submit">{{ t('settings.claude.save_replace') if access.source == 'stored' else t('settings.claude.save') }}</button>
+      {% if access.source == 'stored' %}<button class="button danger" type="button" id="token-remove">{{ t('settings.claude.remove') }}</button>{% endif %}
+      <span class="small" id="token-status" aria-live="polite"></span>
+    </div>
+  </form>
+  <p class="small muted">{{ t('settings.claude.personal') }}</p>
+  {% elif access.source == 'env' %}
+  <p class="small muted">{{ t('settings.claude.env_note') }}</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/js/settings.js"></script>
+{% endblock %}

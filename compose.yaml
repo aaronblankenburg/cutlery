@@ -4,6 +4,7 @@
 #   CUTLERY_DATA_DIR    keep and back up: database, briefings, comments, cut plans, clip metadata, password hash
 #   CUTLERY_WORK_DIR    regenerable: 360p copies, analysis, renders, exports, temporary files of jobs
 #   CUTLERY_MODELS_DIR  downloaded models (Whisper, detection), shared by all projects
+#   CUTLERY_SECRETS_DIR the Claude token entered in the web UI; mounted only into the runner
 # The directories must exist and belong to PUID:PGID; Cutlery refuses to start otherwise.
 #
 # Two services from the same image:
@@ -84,6 +85,8 @@ services:
       - {type: bind, source: "${CUTLERY_DATA_DIR}", target: /data, bind: {create_host_path: false}}
       - {type: bind, source: "${CUTLERY_WORK_DIR}", target: /work, bind: {create_host_path: false}}
       - {type: bind, source: "${CUTLERY_MODELS_DIR}", target: /models, bind: {create_host_path: false}}
+      # a token entered in the web UI (Settings) is kept here; only the runner mounts this folder
+      - {type: bind, source: "${CUTLERY_SECRETS_DIR:?set CUTLERY_SECRETS_DIR in .env}", target: /secrets, bind: {create_host_path: false}}
       - /var/run/docker.sock:/var/run/docker.sock
       - {type: bind, source: "${CLAUDE_CODE_OAUTH_TOKEN_FILE:-/dev/null}", target: /run/secrets/claude-oauth-token, read_only: true}
       - {type: bind, source: "${ANTHROPIC_API_KEY_FILE:-/dev/null}", target: /run/secrets/anthropic-api-key, read_only: true}

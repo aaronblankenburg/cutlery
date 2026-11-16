@@ -172,3 +172,11 @@ class TestPages:
         a.mkdir(parents=True)
         (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": GOOD["fingerprint"]}}]))
         assert client.get(f"/api/projects/{pid}/state").json()["ready"] is None
+
+
+def test_settings_page_and_token_api_without_runner(client):
+    for lang, words in (("de", "Claude-Zugang"), ("en", "Claude access")):
+        r = client.get("/settings", headers={"Accept-Language": lang})
+        assert r.status_code == 200 and words in r.text
+    r = client.put("/api/claude/token", json={"token": "sk-ant-oat01-" + "a" * 40})
+    assert r.status_code == 409                                      # only the runner stores tokens
