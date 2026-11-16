@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import json
 import subprocess
 
@@ -182,8 +183,12 @@ def ffprobe_sidecar(path, rel_path):
     v = next(s for s in info["streams"] if s["codec_type"] == "video")
     a = next(s for s in info["streams"] if s["codec_type"] == "audio")
     size = path.stat().st_size
+    data = path.read_bytes()
+    # the rotated test clip is a stream copy of another one: only the container differs, so hash like the browser does
+    fp = {"size": size, "head_sha256": hashlib.sha256(data[:1 << 20]).hexdigest(),
+          "tail_sha256": hashlib.sha256(data[-(1 << 20):]).hexdigest()}
     return variant(rel_path=rel_path, file=rel_path.split("/")[-1], size=size, duration=float(v["duration"]),
-                   fingerprint={"size": size, "head_sha256": "d" * 64, "tail_sha256": "e" * 64},
+                   fingerprint=fp,
                    video={"codec": "avc", "width": v["width"], "height": v["height"], "rotation": 0,
                           "r_frame_rate": v["r_frame_rate"], "avg_frame_rate": v["avg_frame_rate"],
                           "nb_frames": int(v["nb_frames"])},

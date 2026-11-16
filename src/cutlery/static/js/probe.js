@@ -1,7 +1,7 @@
 // Reads the ORIGINAL file of a clip and writes its sidecar (format cutlery.sidecar/1, docs/sidecar.md).
 // Runs in the pipeline worker; only small slices of the file are read.
 import * as MB from '../vendor/mediabunny-1.64.0.min.mjs';
-import { inspect, frameRates, startTimecode, gpmdTrack } from './isobmff.js';
+import { inspect, frameRates, trackDuration, startTimecode, gpmdTrack } from './isobmff.js';
 
 export const FORMAT = 'cutlery.sidecar/1';
 const MIB = 1024 * 1024;
@@ -99,6 +99,8 @@ export async function probe(file, relPath) {
     if (video) {
       const vt = box?.tracks.find((t) => t.handler === 'vide' && t.id === video.id) || box?.tracks.find((t) => t.handler === 'vide');
       const rates = vt ? frameRates(vt) : null;
+      // like ffprobe's video stream duration: the sum of the sample durations, shortened by an edit list
+      const shown = vt ? trackDuration(vt, box?.timescale) : null;
       let stats = null;
       if (!rates) stats = await video.computePacketStats(1000).catch(() => null);
       const fr = stats ? `${Math.round(stats.averagePacketRate * 1000)}/1000` : null;
@@ -114,18 +116,21 @@ export async function probe(file, relPath) {
         avg_frame_rate: rates?.avg_frame_rate || fr,
         nb_frames: rates?.nb_frames ?? null,
         vfr: rates?.vfr ?? false,
+        edit_list: shown?.editList ?? false,
         bit_depth: vt?.bitDepth ?? null,
         hdr: await video.hasHighDynamicRange().catch(() => false),
         time_base: vt?.timescale ? `1/${vt.timescale}` : null,
       };
-      // like ffprobe's video stream duration: the sum of the sample durations
-      sc.duration = rates?.duration || await video.computeDuration();
+      sc.duration = shown?.seconds || await video.computeDuration();
     }
     if (audio) {
       sc.audio = { codec: audio.codec || 'unknown', channels: audio.numberOfChannels, sample_rate: audio.sampleRate };
     }
     if (!sc.duration) sc.duration = await input.computeDuration().catch(() => null);
-    sc.format_duration = box?.duration ?? await input.computeDuration().catch(() => null);
+    // the duration of the whole file as ffprobe reports it: the longest of the tracks as they are shown
+    const sound = box?.tracks.find((t) => t.handler === 'soun');
+    const longest = Math.max(sc.duration || 0, sound ? trackDuration(sound, box.timescale).seconds : 0);
+    sc.format_duration = longest || box?.duration || (await input.computeDuration().catch(() => null));
     const problem = await decodeProblem(input, video, audio);
     if (problem) sc.unsupported = problem;
   } finally {

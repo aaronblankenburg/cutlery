@@ -28,6 +28,6 @@ cutlery = ["templates/**/*", "static/**/*", "locales/*.json", "migrations/*.sql"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["browser: Playwright tests (need Chromium/WebKit and ffmpeg)"]
+markers = ["browser: Playwright tests (need Chromium/WebKit and ffmpeg)", "integration: needs Docker and a cutter image (see tests/integration)"]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
-pythonpath = ["tests", "tests/unit"]
+pythonpath = ["tests", "tests/unit", "tests/integration"]

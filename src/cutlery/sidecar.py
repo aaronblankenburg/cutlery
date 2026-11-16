@@ -130,6 +130,8 @@ def validate(raw: bytes | str | dict) -> dict:
             _str(video, key, required=unsupported is None, pattern=RATE)
         _num(video, "bit_depth", lo=1, hi=16, integer=True, required=False)
         _num(video, "nb_frames", lo=0, integer=True, required=False)
+        if video.get("edit_list") not in (None, True, False):
+            raise SidecarError("video.edit_list must be true or false")
     elif unsupported is None:
         raise SidecarError("video is missing")
 
@@ -171,7 +173,8 @@ def standin_matches(sidecar: dict, standin_duration: float, standin_frames: int 
     if abs(standin_duration - duration) > tolerance:
         return (f"the 360p copy is {standin_duration:.3f} s long, the original {duration:.3f} s "
                 f"(allowed difference {tolerance:.3f} s)")
-    nb = sidecar.get("video", {}).get("nb_frames")
+    video = sidecar.get("video", {})
+    nb = None if video.get("edit_list") else video.get("nb_frames")     # frames the edit list hides are not in the stand-in
     if nb and standin_frames is not None and abs(standin_frames - nb) > 2:
         return f"the 360p copy has {standin_frames} frames, the original {nb}"
     return None

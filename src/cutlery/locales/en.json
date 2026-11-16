@@ -62,5 +62,12 @@
   "project.delete": "Delete project",
   "project.delete_lead": "Deletes all data of this project on the server: copies, metadata, cuts and comments. Your originals are not touched.",
   "project.delete_confirm": "Type the project name “{name}” to confirm",
-  "project.delete_mismatch": "The name does not match; nothing was deleted."
+  "project.delete_mismatch": "The name does not match; nothing was deleted.",
+  "footage.analysis.title": "Analysis on the server",
+  "footage.analysis.idle": "Starts as soon as the first clips are uploaded.",
+  "footage.analysis.waiting": "Waiting for more clips before the next analysis run …",
+  "footage.analysis.running": "Analysing: {analysed} of {uploaded} uploaded clips done.",
+  "footage.analysis.done": "Analysis done: {analysed} clips (transcripts: {transcribed}).",
+  "footage.analysis.failed": "The analysis stopped: {message}",
+  "footage.analysis.retry": "Try again"
 }

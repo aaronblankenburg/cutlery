@@ -378,6 +378,28 @@ async function run(fileList) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// ------------------------------------------------------------------ analysis on the server
+
+async function showAnalysis() {
+  let a;
+  try { a = await api(`/api/projects/${project}/analysis`); } catch { return; }
+  const card = $('analysis');
+  card.hidden = rows.size === 0 && !a.uploaded;
+  let text, failed = a.state === 'failed';
+  if (failed) text = t('footage.analysis.failed', { message: a.message || '' });
+  else if (a.state === 'running') text = t('footage.analysis.running', a);
+  else if (a.state === 'waiting') text = t('footage.analysis.waiting');
+  else if (a.clips && a.clips >= a.uploaded) text = t('footage.analysis.done', a);
+  else text = t('footage.analysis.idle');
+  $('analysis-text').textContent = text;
+  $('analysis-retry').hidden = !failed;
+}
+$('analysis-retry').addEventListener('click', async () => {
+  await api(`/api/projects/${project}/analysis`, { method: 'POST' });
+  showAnalysis();
+});
+setInterval(showAnalysis, 5000);
+
 // ------------------------------------------------------------------ start
 
 await load();
@@ -394,5 +416,6 @@ if (problems.length) {
   $('pick-folder').setAttribute('aria-disabled', 'true');
   $('folder-input').disabled = true;
 }
+showAnalysis();
 $('folder-input').addEventListener('change', (e) => run(e.target.files));
 window.cutlery = { caps, rows, run };   // for tests and debugging

@@ -184,6 +184,7 @@ export async function inspect(file) {
     const t = fullBoxTime(view, mvhd);
     out.created = macDate(t.created);
     out.duration = t.timescale ? t.duration / t.timescale : null;
+    out.timescale = t.timescale;
   }
   for (const b of find(view, root, ['udta']).flatMap((u) => children(view, u.body, u.end))) {
     if (b.type.startsWith('©')) {
@@ -203,6 +204,18 @@ export async function inspect(file) {
     }
     const hdlr = find(view, trak, ['mdia', 'hdlr'])[0];
     if (hdlr) tr.handler = fourcc(view, hdlr.body + 8);
+    const elst = find(view, trak, ['edts', 'elst'])[0];
+    if (elst) {
+      const version = view.getUint8(elst.body), n = view.getUint32(elst.body + 4);
+      tr.edits = [];
+      for (let i = 0; i < n; i++) {
+        const o = elst.body + 8 + i * (version === 1 ? 20 : 12);
+        if (o + (version === 1 ? 20 : 12) > elst.end) break;
+        tr.edits.push(version === 1
+          ? { segment: u64(view, o), mediaTime: Number(BigInt.asIntN(64, view.getBigUint64(o + 8))) }
+          : { segment: view.getUint32(o), mediaTime: view.getInt32(o + 4) });
+      }
+    }
     const stbl = find(view, trak, ['mdia', 'minf', 'stbl'])[0];
     if (!stbl) continue;
     const stsd = find(view, stbl, ['stsd'])[0];
@@ -238,6 +251,17 @@ export async function inspect(file) {
     out.tracks.push(tr);
   }
   return out;
+}
+
+// The duration of the track as ffprobe reports it. An edit list that shows less than the samples contain (a clip cut
+// out of a longer one with stream copy keeps the frames before its first key frame, which are not shown) shortens it.
+export function trackDuration(tr, movieTimescale) {
+  const stts = tr.table?.stts || [];
+  const media = stts.reduce((n, [count, delta]) => n + count * delta, 0) || tr.mediaDuration;
+  const shown = (tr.edits || []).filter((e) => e.mediaTime >= 0);
+  if (!shown.length || !movieTimescale || !tr.timescale) return { seconds: media / tr.timescale, editList: false };
+  const ticks = (shown.reduce((n, e) => n + e.segment, 0) / movieTimescale) * tr.timescale;
+  return { seconds: Math.min(media, ticks) / tr.timescale, editList: ticks < media };
 }
 
 // avg_frame_rate and r_frame_rate as ffprobe derives them for MP4/MOV, plus the frame count and VFR flag.

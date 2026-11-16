@@ -21,7 +21,10 @@ def cfg(tmp_path):
     for d in ("data", "work", "models"):
         (tmp_path / d).mkdir()
     return config_mod.load({"CUTLERY_DATA_DIR": str(tmp_path / "data"), "CUTLERY_WORK_DIR": str(tmp_path / "work"),
-                            "CUTLERY_MODELS_DIR": str(tmp_path / "models")})
+                            "CUTLERY_MODELS_DIR": str(tmp_path / "models"),
+                            # never run the real cutter in unit tests
+                            "CUTLERY_CUTTER_BIN": str(FIXTURES / "fake_cutter.py"),
+                            "CUTLERY_ANALYSIS_SETTLE_SECONDS": "0.2"})
 
 
 @pytest.fixture

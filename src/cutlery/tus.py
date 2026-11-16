@@ -82,8 +82,9 @@ def check_standin(info: dict, sidecar: dict) -> str | None:
 
 
 class TusApp:
-    def __init__(self, cfg, db, projects, base="/tus/"):
+    def __init__(self, cfg, db, projects, base="/tus/", on_stored=None):
         self.cfg, self.db, self.projects, self.base = cfg, db, projects, base
+        self.on_stored = on_stored             # called with the project id after a stand-in has been stored
         self.dir = cfg.work_dir / "uploads"
         self.dir.mkdir(parents=True, exist_ok=True)
         self.locks: dict[str, asyncio.Lock] = {}
@@ -221,6 +222,8 @@ class TusApp:
         self.projects.mark(pid, cid, "uploaded", None, dst.stat().st_size)
         self.projects.touch(pid)
         log.info("project %s clip %s: stand-in stored (%s)", pid, cid, clip["rel_path"])
+        if self.on_stored:
+            self.on_stored(pid)
         return None
 
     async def _discard(self, uid):

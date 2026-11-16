@@ -62,5 +62,12 @@
   "project.delete": "Projekt löschen",
   "project.delete_lead": "Löscht alle Daten dieses Projekts auf dem Server: Kopien, Metadaten, Fassungen und Kommentare. Deine Originale bleiben unberührt.",
   "project.delete_confirm": "Zum Bestätigen den Projektnamen „{name}“ eingeben",
-  "project.delete_mismatch": "Der Name stimmt nicht; es wurde nichts gelöscht."
+  "project.delete_mismatch": "Der Name stimmt nicht; es wurde nichts gelöscht.",
+  "footage.analysis.title": "Analyse auf dem Server",
+  "footage.analysis.idle": "Startet, sobald die ersten Clips hochgeladen sind.",
+  "footage.analysis.waiting": "Wartet auf weitere Clips, bevor der nächste Analyse-Lauf startet …",
+  "footage.analysis.running": "Analyse läuft: {analysed} von {uploaded} hochgeladenen Clips fertig.",
+  "footage.analysis.done": "Analyse fertig: {analysed} Clips (Transkripte: {transcribed}).",
+  "footage.analysis.failed": "Die Analyse ist abgebrochen: {message}",
+  "footage.analysis.retry": "Erneut versuchen"
 }

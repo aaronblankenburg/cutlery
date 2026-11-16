@@ -19,6 +19,8 @@ from starlette.templating import Jinja2Templates
 
 from . import __version__, i18n
 from . import config as config_mod
+from . import cutter_project
+from .analysis import AnalysisWorker
 from .auth import BasicAuthMiddleware
 from .db import Database
 from .projects import NotFound, Projects
@@ -86,7 +88,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         check_trees(cfg)
     db = Database(cfg.database)
     projects = Projects(cfg, db)
-    tus = TusApp(cfg, db, projects)
+    worker = AnalysisWorker(cfg, db, projects)
+    tus = TusApp(cfg, db, projects, on_stored=worker.request)
     templates = Jinja2Templates(directory=str(PKG / "templates"))
 
     def lang_of(request: Request) -> str:
@@ -150,6 +153,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         form = await read_form(request)
         if form.get("confirm") != p["name"]:
             return page(request, "footage.html", project=p, delete_error=True)
+        await anyio.to_thread.run_sync(worker.cancel, p["id"])
         await anyio.to_thread.run_sync(projects.delete, p["id"])
         log.info("project %s deleted", p["id"])
         return RedirectResponse("/", status_code=303)
@@ -204,6 +208,19 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
             return JSONResponse({"error": str(e)}, status_code=422)
         return JSONResponse({"ok": True})
 
+    async def api_analysis(request):
+        p = project_or_404(request.path_params["pid"])
+        done = await anyio.to_thread.run_sync(cutter_project.progress, projects.paths(p["id"]))
+        done.pop("fingerprints")
+        uploaded = sum(1 for c in projects.clips(p["id"]) if c["state"] == "uploaded")
+        return JSONResponse({"state": p["analysis_state"], "message": p["analysis_message"], "updated": p["analysis_updated"],
+                             "uploaded": uploaded, **done})
+
+    async def api_analysis_start(request):
+        p = project_or_404(request.path_params["pid"])
+        worker.request(p["id"])
+        return JSONResponse({"ok": True})
+
     async def api_status(request):
         return JSONResponse({"version": __version__, "disks": [d.__dict__ for d in disk_space(cfg)]})
 
@@ -226,8 +243,12 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(housekeeping)
+            n = await anyio.to_thread.run_sync(worker.resume)
+            if n:
+                log.info("analysis resumes for %d projects", n)
             yield
             tg.cancel_scope.cancel()
+            await anyio.to_thread.run_sync(worker.close)
 
     routes = [
         Route("/", home),
@@ -237,6 +258,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/lang/{code}", set_language),
         Route("/i18n/{code}.json", catalog),
         Route("/api/status", api_status),
+        Route("/api/projects/{pid}/analysis", api_analysis),
+        Route("/api/projects/{pid}/analysis", api_analysis_start, methods=["POST"]),
         Route("/api/projects/{pid}/clips", api_clips, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/clips/{cid}/telemetry/{kind}", api_telemetry, methods=["PUT"]),
         Route("/healthz", healthz),
@@ -250,5 +273,5 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     ]
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan,
                     exception_handlers={HTTPException: http_error})
-    app.state.cfg, app.state.db, app.state.projects, app.state.tus = cfg, db, projects, tus
+    app.state.cfg, app.state.db, app.state.projects, app.state.tus, app.state.worker = cfg, db, projects, tus, worker
     return app

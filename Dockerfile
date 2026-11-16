@@ -1,5 +1,8 @@
 # Cutlery: the web app on top of the cutter image (ffmpeg, FilmCraft CLI, cutter, Python 3.12).
 # Bump cutter: set CUTTER_IMAGE to the new tag and digest, rebuild, run the tests.
+# NOTE: the stand-in support (cutter branch cutlery-support) is not in a cutter release yet. Until it is, build the
+# cutter image from that branch and pass it:  docker build -t cutter:cutlery-dev ../cutter &&
+#   docker build --build-arg CUTTER_IMAGE=cutter:cutlery-dev -t cutlery:dev .
 ARG CUTTER_IMAGE=ghcr.io/aaronblankenburg/cutter:0.2.1@sha256:83043b620c13856d3306f2998abea642f5c18c1a6e06f33a88b6c769ce985c2d
 FROM ${CUTTER_IMAGE}
 

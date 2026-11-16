@@ -42,6 +42,13 @@
   </div>
 </section>
 
+<section class="card" id="analysis" hidden>
+  <header><h2>{{ t('footage.analysis.title') }}</h2>
+    <div class="actions"><button class="button" type="button" id="analysis-retry" hidden>{{ t('footage.analysis.retry') }}</button></div>
+  </header>
+  <p class="small" id="analysis-text"></p>
+</section>
+
 <details class="card">
   <summary>{{ t('project.delete') }}</summary>
   <form method="post" action="/projects/{{ project.id }}/delete" class="stack">

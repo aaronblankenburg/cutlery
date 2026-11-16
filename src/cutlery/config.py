@@ -9,6 +9,7 @@ import dataclasses
 import ipaddress
 import os
 import pathlib
+import shlex
 
 
 class ConfigError(Exception):
@@ -25,6 +26,10 @@ class Config:
     trusted_proxies: tuple = ()
     disk_warn_gb: float = 20.0
     upload_expiry_h: int = 72
+    cutter_bin: str = "cutter"
+    analysis_settle_s: float = 20.0         # wait this long after the last finished upload before analysing
+    analysis_parallel: int = 1
+    analysis_args: tuple = ()               # extra arguments for `cutter analyze`, e.g. --model small
 
     @property
     def htpasswd(self) -> pathlib.Path:
@@ -72,6 +77,10 @@ def load(env=None) -> Config:
         trusted_proxies=_networks(env.get("CUTLERY_TRUSTED_PROXIES", DEFAULT_TRUSTED)),
         disk_warn_gb=float(env.get("CUTLERY_DISK_WARN_GB") or 20),
         upload_expiry_h=_int(env, "CUTLERY_UPLOAD_EXPIRY_HOURS", 72),
+        cutter_bin=env.get("CUTLERY_CUTTER_BIN") or "cutter",
+        analysis_settle_s=float(env.get("CUTLERY_ANALYSIS_SETTLE_SECONDS") or 20),
+        analysis_parallel=max(1, _int(env, "CUTLERY_ANALYSIS_PARALLEL", 1)),
+        analysis_args=tuple(shlex.split(env.get("CUTLERY_ANALYSIS_ARGS") or "")),
     )
 
 

@@ -21,7 +21,7 @@ playwright = pytest.importorskip("playwright.sync_api")
 
 CHROME_ARGS: list[str] = []
 USABLE = ["Day 1/2024-06-01 10-15-00 h264.mp4", "Day 2/ntsc 29.97.mov", "Day 2/start timecode.mov",
-          "Mono 44k/mono 44.1 kHz.mp4", "Phone/portrait rotated.mp4", "Phone/vfr.mp4",
+          "Mono 44k/mono 44.1 kHz.mp4", "Trimmed/stream copy cut.mp4", "Phone/portrait rotated.mp4", "Phone/vfr.mp4",
           "Small/already small 512x288.mp4"]
 
 
@@ -143,6 +143,7 @@ def test_transcode_and_upload(page, server, clips):
         assert sc["video"]["nb_frames"] == int(ov["nb_frames"]), name
         assert (sc["video"]["width"], sc["video"]["height"]) == (ov["width"], ov["height"]), name
         assert abs(sc["duration"] - float(ov["duration"])) < 0.002, name
+        assert abs(sc["format_duration"] - float(o["format"]["duration"])) < 0.002, name
         assert (sc["audio"]["channels"], sc["audio"]["sample_rate"]) == (oa["channels"], int(oa["sample_rate"]))
         ff_rot = next((int(d["rotation"]) for d in ov.get("side_data_list", []) if "rotation" in d), 0)
         assert sc["video"]["rotation"] == (-ff_rot) % 360, name          # sidecar: clockwise
@@ -159,11 +160,19 @@ def test_transcode_and_upload(page, server, clips):
         upright = (ov["height"], ov["width"]) if ff_rot % 180 else (ov["width"], ov["height"])
         assert max(sv["width"], sv["height"]) == min(640, max(upright)), name
         assert (sv["width"] > sv["height"]) == (upright[0] > upright[1]), name
-        pts = lambda f: [float(x["pts_time"]) for x in ffprobe(f, "-select_streams", "v:0",
-                                                                "-show_entries", "packet=pts_time")["packets"]]
-        po, ps = sorted(pts(original)), sorted(pts(standin))
-        assert len(po) == len(ps), name
-        assert max(abs(a - b) for a, b in zip(po, ps)) < 0.001, name
+        # the frames that are shown (decoded), at the times they are shown
+        pts = lambda f: sorted(float(x["pts_time"]) for x in ffprobe(f, "-select_streams", "v:0",
+                                                                      "-show_entries", "frame=pts_time")["frames"])
+        po, ps = pts(original), pts(standin)
+        if sc["video"]["edit_list"]:
+            # an edit list that starts between two frames: ffmpeg shows the first kept frame at 0, Mediabunny keeps the
+            # exact offset (docs/m1-feasibility.md). Up to half a frame and one frame more are tolerated.
+            frame = 1 / float(ov["r_frame_rate"].split("/")[0]) * float(ov["r_frame_rate"].split("/")[1])
+            assert abs(len(po) - len(ps)) <= 1, name
+            assert max(min(abs(a - b) for b in ps) for a in po) <= frame / 2 + 0.001, name
+        else:
+            assert len(po) == len(ps), name
+            assert max(abs(a - b) for a, b in zip(po, ps)) < 0.001, name
 
     sc = json.loads((sidecars / "Day 2/ntsc 29.97.mov.json").read_text())
     assert sc["timecode"] == "01:02:03;04" and sc["video"]["r_frame_rate"] == "30000/1001"

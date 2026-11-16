@@ -44,6 +44,16 @@ def rotated(name, src, degrees):
     return path
 
 
+def trimmed(name, src):
+    """A copy cut out of the middle with stream copy: starts before a key frame, so an edit list hides the first
+    frames (what editors and some phones write)."""
+    path = OUT / name
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        ff("-ss", "2.3", "-i", str(src), "-t", "3", "-c", "copy", "-avoid_negative_ts", "disabled", str(path))
+    return path
+
+
 def main():
     made = [
         make("Day 1/2024-06-01 10-15-00 h264.mp4"),
@@ -55,6 +65,7 @@ def main():
         make("Phone/vfr.mp4", rate="30", vf="setpts='if(lt(N,30),N/30/TB,(30+(N-30)*2)/30/TB)'",
              extra=("-fps_mode", "passthrough", "-video_track_timescale", "30000")),
         make("Mono 44k/mono 44.1 kHz.mp4", sr=44100, channels=1),
+        trimmed("Trimmed/stream copy cut.mp4", make("Trimmed/.long source.mp4", d=8, extra=("-g", "50"))),
         make("Small/already small 512x288.mp4", w=512, h=288),
     ]
     bad = OUT / "Broken" / "not a video.mts"

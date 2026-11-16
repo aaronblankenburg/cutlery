@@ -18,8 +18,8 @@ telemetry sits next to it: `<rel_path>.gpmd` (GoPro) and `<rel_path>.srt` (DJI).
 | `rel_path` | path inside the chosen footage folder, `/`-separated, as the browser reports it (`webkitRelativePath` without the folder itself). Kept exactly, including Unicode normalisation (macOS may report NFD). |
 | `size`, `mtime` | bytes; last modification as ISO 8601 UTC |
 | `container` | e.g. `MP4`, `QuickTime`, `Matroska` |
-| `duration` | seconds; the video stream's duration as ffprobe reports it (sum of the sample durations) |
-| `format_duration` | seconds; the movie duration (`mvhd`), which includes edit lists |
+| `duration` | seconds; the video stream's duration as ffprobe reports it: the sum of the sample durations, shortened by an edit list (a clip cut out with stream copy keeps frames before its first key frame that are not shown) |
+| `format_duration` | seconds; the duration of the whole file as ffprobe reports it: the longest of the video and the audio track as they are shown. This is the clip's duration for cutter. |
 | `creation_time` | ISO 8601 UTC from the movie header (`mvhd`), or `null` |
 | `timecode` | start timecode from the `tmcd` track, `HH:MM:SS:FF`, or `HH:MM:SS;FF` for drop-frame; `null` if none |
 | `gps` | ISO 6709 location from the container tags (`©xyz`, `com.apple.quicktime.location.ISO6709`), or `null` |
@@ -29,7 +29,8 @@ telemetry sits next to it: `<rel_path>.gpmd` (GoPro) and `<rel_path>.srt` (DJI).
 | `video.display_width`, `video.display_height` | size as displayed (after rotation and pixel aspect ratio) |
 | `video.rotation` | degrees **clockwise** to display the picture upright: 0, 90, 180 or 270. ffprobe reports the same as a counter-clockwise `rotation` side datum (−90 ⇔ 90). |
 | `video.r_frame_rate`, `video.avg_frame_rate` | rationals exactly as ffprobe reports them (`30000/1001`) |
-| `video.nb_frames` | number of frames |
+| `video.nb_frames` | number of frames in the file (including frames an edit list hides) |
+| `video.edit_list` | `true` if an edit list changes what is shown; the server then does not compare frame counts |
 | `video.vfr` | `true` if the frame durations vary |
 | `video.bit_depth` | 8, 10 … from `avcC`/`hvcC` |
 | `video.hdr` | `true` for HDR transfer characteristics |
