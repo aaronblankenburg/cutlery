@@ -278,8 +278,8 @@ Intel NUC home server; keep it working on hardware of that class.
 **Target flow:**
 
 1. Clone the repo.
-2. Copy `.env.example` to `.env` and adjust: data path, port, auth (token file or API key), optional
-   notifications.
+2. Copy `.env.example` to `.env` and adjust: storage paths, user and group IDs, port, auth (token file
+   or API key), optional notifications.
 3. Set the password with a one-line command.
 4. `docker compose up -d`.
 
@@ -294,16 +294,53 @@ Nothing more.
 - If that doesn't work cleanly without the Docker socket in the web container, propose the simplest
   safe alternative and explain it.
 
-**Data and operation**
+**Compose file and storage layout**
 
-- All data lives under one host folder (projects, SQLite, uploads), plus a volume for models.
+The repository ships a ready-to-use `compose.yaml` that already defines where every piece of data is
+stored, so the operator only sets paths in `.env`. Create it in M1 (uploads need a home from day one)
+and finish it in M7.
+
+- All storage is bind mounts to host directories, no anonymous or named Docker volumes, so the
+  operator always knows where the files are. Every mount comes from a variable in `.env`.
+- Split the data into two trees, so the regenerable part can be excluded from backups (for example
+  as a separate btrfs subvolume or a backup exclude rule):
+  - `CUTLERY_DATA_DIR` – what must be kept: SQLite database, briefings, storyboards, uploaded images
+    and music, comments, edit plans and decisions per cut, sidecar metadata and manifests, settings.
+  - `CUTLERY_WORK_DIR` – what can be regenerated: 360p uploads, analysis output (transcripts,
+    contact sheets, embeddings caches), review renders, FilmCraft working files, export packages,
+    temporary files of running jobs.
+  - `CUTLERY_MODELS_DIR` – downloaded models (Whisper, detection models), shared by all projects.
+- Inside these trees use a documented, stable layout per project
+  (e.g. `<dir>/projects/<project-id>/…`) that matches what cutter expects for a project folder,
+  so the agent container mounts exactly one project.
+- Running jobs write their temporary files to `CUTLERY_WORK_DIR`, never into the container's
+  writable layer or the Docker root (which on many hosts sits on a small system disk).
+- `PUID`/`PGID` in `.env`: containers write files as that user, so files on an external disk are
+  owned by the operator and not by root.
+- Defaults in `.env.example`: `./data`, `./work` and `./models` next to the compose file. The README
+  shows an example for data on an external disk.
+- On start, check that every configured directory exists and is writable, and fail with a clear
+  message instead of letting Docker silently create empty root-owned directories. Show free disk
+  space per tree in the UI and warn when it runs low.
+
+My own instance runs on an Intel NUC with an external disk mounted at `/mnt/hdd`. Use exactly this
+as the README example and as the reference for testing the deployment:
+
+    CUTLERY_DATA_DIR=/mnt/hdd/cutlery/data
+    CUTLERY_WORK_DIR=/mnt/hdd/cutlery/work
+    CUTLERY_MODELS_DIR=/mnt/hdd/cutlery/models
+
+Keep the defaults in the repository generic; my paths go only into my own `.env` and the example.
+
+**Operation**
+
 - `restart: unless-stopped`, health checks, logs to stdout.
 
 **Updates and backup**
 
 - Updates are `docker compose pull && docker compose up -d`. Database migrations run automatically.
-- Document which folders belong in a backup and which don't. 360p uploads and renders can be
-  regenerated; comments and edit plans cannot.
+- Document the backup rule that follows from the layout: back up `CUTLERY_DATA_DIR`; `CUTLERY_WORK_DIR`
+  and `CUTLERY_MODELS_DIR` can be regenerated (360p uploads by uploading again).
 
 ## Tests
 
