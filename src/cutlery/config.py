@@ -30,6 +30,29 @@ class Config:
     analysis_settle_s: float = 20.0         # wait this long after the last finished upload before analysing
     analysis_parallel: int = 1
     analysis_args: tuple = ()               # extra arguments for `cutter analyze`, e.g. --model small
+    # Claude Code jobs
+    claude_bin: str = "claude"
+    model_draft: str = "claude-opus-5-5"
+    model_next: str = "claude-opus-5-5"
+    max_turns: int = 400
+    claude_args: tuple = ()
+    jobs_parallel: int = 1
+    job_timeout_s: int = 8 * 3600
+    executor: str = "local"                 # local (child process) or runner (isolated container per job)
+    skill_dir: str = "/opt/cutter/skills/video-editing"
+    token_expires: str = ""                 # date of the subscription token's expiry (YYYY-MM-DD), for a warning
+    # notifications
+    webhook_url: str = ""
+    mqtt_host: str = ""
+    mqtt_port: int = 1883
+    mqtt_topic: str = "cutlery/jobs"
+    mqtt_user: str = ""
+    mqtt_password: str = ""
+    public_url: str = ""
+
+    @property
+    def runner_socket(self) -> pathlib.Path:
+        return self.work_dir / ".runner" / "runner.sock"
 
     @property
     def htpasswd(self) -> pathlib.Path:
@@ -66,6 +89,24 @@ def _int(env, name, default):
         raise ConfigError(f"{name} must be a whole number, not '{raw}'.")
 
 
+def _choice(env, name, options, default):
+    value = env.get(name) or default
+    if value not in options:
+        raise ConfigError(f"{name} must be one of {', '.join(options)}, not '{value}'.")
+    return value
+
+
+def _date(env, name):
+    value = (env.get(name) or "").strip()
+    if value:
+        import datetime
+        try:
+            datetime.date.fromisoformat(value)
+        except ValueError:
+            raise ConfigError(f"{name} must be a date like 2027-11-12, not '{value}'.")
+    return value
+
+
 def load(env=None) -> Config:
     env = os.environ if env is None else env
     return Config(
@@ -81,6 +122,23 @@ def load(env=None) -> Config:
         analysis_settle_s=float(env.get("CUTLERY_ANALYSIS_SETTLE_SECONDS") or 20),
         analysis_parallel=max(1, _int(env, "CUTLERY_ANALYSIS_PARALLEL", 1)),
         analysis_args=tuple(shlex.split(env.get("CUTLERY_ANALYSIS_ARGS") or "")),
+        claude_bin=env.get("CUTLERY_CLAUDE_BIN") or "claude",
+        model_draft=env.get("CUTLERY_MODEL_DRAFT") or "claude-opus-5-5",
+        model_next=env.get("CUTLERY_MODEL_NEXT") or env.get("CUTLERY_MODEL_DRAFT") or "claude-opus-5-5",
+        max_turns=_int(env, "CUTLERY_MAX_TURNS", 400),
+        claude_args=tuple(shlex.split(env.get("CUTLERY_CLAUDE_ARGS") or "")),
+        jobs_parallel=max(1, _int(env, "CUTLERY_JOBS_PARALLEL", 1)),
+        job_timeout_s=_int(env, "CUTLERY_JOB_TIMEOUT_HOURS", 8) * 3600,
+        executor=_choice(env, "CUTLERY_EXECUTOR", ("local", "runner"), "local"),
+        skill_dir=env.get("CUTLERY_SKILL_DIR") or "/opt/cutter/skills/video-editing",
+        token_expires=_date(env, "CUTLERY_CLAUDE_TOKEN_EXPIRES"),
+        webhook_url=env.get("CUTLERY_WEBHOOK_URL") or "",
+        mqtt_host=env.get("CUTLERY_MQTT_HOST") or "",
+        mqtt_port=_int(env, "CUTLERY_MQTT_PORT", 1883),
+        mqtt_topic=env.get("CUTLERY_MQTT_TOPIC") or "cutlery/jobs",
+        mqtt_user=env.get("CUTLERY_MQTT_USER") or "",
+        mqtt_password=env.get("CUTLERY_MQTT_PASSWORD") or "",
+        public_url=env.get("CUTLERY_PUBLIC_URL") or "",
     )
 
 

@@ -51,6 +51,47 @@
   <p class="small" id="analysis-text"></p>
 </section>
 
+<form class="card stack" id="briefing" data-project="{{ project.id }}">
+  <header><h2>{{ t('briefing.title') }}</h2></header>
+  <div><label for="b-prompt">{{ t('briefing.prompt') }}</label>
+    <textarea id="b-prompt" name="prompt" rows="4" maxlength="4000" required></textarea></div>
+  <div class="grid-2">
+    <div><label for="b-purpose">{{ t('briefing.purpose') }}</label><input type="text" id="b-purpose" name="purpose" maxlength="4000"></div>
+    <div><label for="b-length">{{ t('briefing.length') }}</label>
+      <select id="b-length" name="length"><option value=""></option>
+        {% for n in (3, 5, 10, 20) %}<option value="{{ t('briefing.length.' ~ n) }}">{{ t('briefing.length.' ~ n) }}</option>{% endfor %}
+      </select></div>
+    <div><label for="b-style">{{ t('briefing.style') }}</label><input type="text" id="b-style" name="style" maxlength="4000"></div>
+    <div><label for="b-music">{{ t('briefing.music') }}</label>
+      <select id="b-music" name="music"><option value=""></option>
+        {% for m in ('own_only', 'own_and_search', 'search', 'none') %}<option value="{{ m }}">{{ t('briefing.music.' + m) }}</option>{% endfor %}
+      </select></div>
+  </div>
+  <div><label for="b-nogos">{{ t('briefing.nogos') }}</label><textarea id="b-nogos" name="nogos" rows="2" maxlength="4000"></textarea></div>
+  <p class="small muted">{{ t('briefing.note') }}</p>
+  <div class="row"><button class="button" type="submit">{{ t('briefing.save') }}</button><span class="small muted" id="briefing-status"></span></div>
+</form>
+
+<section class="card" id="jobs" data-project="{{ project.id }}">
+  <header><h2>{{ t('jobs.title') }}</h2>
+    <div class="actions"><button class="button primary" type="button" id="job-draft">{{ t('jobs.draft') }}</button></div>
+  </header>
+  <p class="small muted" id="job-note">{{ t('jobs.draft_note') }}</p>
+  <div class="notice error" id="job-error" hidden></div>
+  <div class="notice" id="claude-warning" hidden></div>
+  <div id="job" hidden>
+    <div class="row"><strong id="job-heading"></strong><span class="pill" id="job-state"></span></div>
+    <p class="small muted" id="job-meta"></p>
+    <div class="notice" id="job-paused" hidden></div>
+    <div class="row">
+      <button class="button primary" type="button" id="job-resume" hidden>{{ t('jobs.resume') }}</button>
+      <button class="button danger" type="button" id="job-cancel" hidden>{{ t('jobs.cancel') }}</button>
+    </div>
+    <ol class="job-log" id="job-log"></ol>
+    <p class="small"><a id="job-raw" href="#">{{ t('jobs.raw') }}</a> <span class="muted">{{ t('jobs.raw_note') }}</span></p>
+  </div>
+</section>
+
 <details class="card">
   <summary>{{ t('project.delete') }}</summary>
   <form method="post" action="/projects/{{ project.id }}/delete" class="stack">
@@ -65,4 +106,5 @@
 {% block scripts %}
 <script src="/static/vendor/tus-js-client-4.3.1.min.js"></script>
 <script type="module" src="/static/js/footage.js"></script>
+<script type="module" src="/static/js/jobs.js"></script>
 {% endblock %}

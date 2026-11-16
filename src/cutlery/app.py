@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.background import BackgroundTask
-from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -22,7 +22,11 @@ from . import __version__, i18n
 from . import config as config_mod
 from . import cutter_project
 from . import export as export_mod
+from . import briefing as briefing_mod
 from .analysis import AnalysisWorker
+from .executor import LocalExecutor, RunnerClient, RunnerError
+from .jobs import JobError, Jobs
+from .notify import Notifier
 from .auth import BasicAuthMiddleware
 from .db import Database
 from .projects import NotFound, Projects
@@ -91,6 +95,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     db = Database(cfg.database)
     projects = Projects(cfg, db)
     worker = AnalysisWorker(cfg, db, projects)
+    executor = RunnerClient(cfg.runner_socket) if cfg.executor == "runner" else LocalExecutor(cfg)
+    jobs = Jobs(cfg, db, projects, executor, Notifier(cfg))
     tus = TusApp(cfg, db, projects, on_stored=worker.request)
     templates = Jinja2Templates(directory=str(PKG / "templates"))
 
@@ -190,11 +196,113 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         await anyio.to_thread.run_sync(projects.set_folder, p["id"], name)
         return JSONResponse({"ok": True})
 
+    # ------------------------------------------------------------ briefing and jobs
+
+    async def api_briefing(request):
+        p = project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        if request.method == "PUT":
+            try:
+                data = briefing_mod.check(await read_json(request))
+            except briefing_mod.BriefingError as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+            lang = lang_of(request)
+            briefing_mod.save(paths, data, lambda key, **v: i18n.translate(lang, key, **v), p["name"])
+            return JSONResponse({"ok": True})
+        return JSONResponse(briefing_mod.load(paths))
+
+    def job_json(j):
+        return {k: j[k] for k in ("id", "kind", "cut", "state", "model", "attempt", "reason", "message", "resume_after",
+                                  "cost_usd", "turns", "created", "started", "ended")}
+
+    def job_or_404(jid):
+        try:
+            return jobs.get(jid)
+        except LookupError:
+            raise HTTPException(404, "unknown job")
+
+    def job_error(request, e):
+        return JSONResponse({"error": str(e), "message": i18n.translate(lang_of(request), e.key)}, status_code=409)
+
+    async def api_jobs(request):
+        p = project_or_404(request.path_params["pid"])
+        if request.method == "POST":
+            data = await read_json(request)
+            try:
+                j = await anyio.to_thread.run_sync(jobs.create, p["id"], str(data.get("kind", "draft")))
+            except JobError as e:
+                return job_error(request, e)
+            return JSONResponse(job_json(j), status_code=201)
+        return JSONResponse({"jobs": [job_json(j) for j in jobs.for_project(p["id"])],
+                             "cuts": cutter_project.cuts(projects.paths(p["id"]))})
+
+    async def api_job_action(request):
+        j = job_or_404(request.path_params["jid"])
+        action = request.path_params["action"]
+        try:
+            if action == "resume":
+                j = await anyio.to_thread.run_sync(jobs.resume, j["id"])
+            elif action == "cancel":
+                j = await anyio.to_thread.run_sync(jobs.cancel, j["id"])
+            else:
+                raise HTTPException(404)
+        except JobError as e:
+            return job_error(request, e)
+        return JSONResponse(job_json(j))
+
+    async def api_job_events(request):
+        """Server-sent events: the job's log as it grows, then its state; ends when the job is no longer active."""
+        j = job_or_404(request.path_params["jid"])
+        after = int(request.query_params.get("after", "0") or 0)
+
+        async def gen():
+            nonlocal after
+            while True:
+                for ev in await anyio.to_thread.run_sync(jobs.events, j["id"], after):
+                    after = ev["n"]
+                    yield f"id: {ev['n']}\nevent: log\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                cur = jobs.get(j["id"])
+                yield f"event: job\ndata: {json.dumps(job_json(cur))}\n\n"
+                if cur["state"] not in ("queued", "running") or await request.is_disconnected():
+                    return
+                await anyio.sleep(1)
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"cache-control": "no-store", "x-accel-buffering": "no"})
+
+    async def api_job_raw(request):
+        j = job_or_404(request.path_params["jid"])
+        f = jobs_dir(j) / f"attempt-{j['attempt']}.jsonl"
+        if not f.is_file():
+            raise HTTPException(404, "no raw log")
+        return FileResponse(f, media_type="application/x-ndjson", filename=f"{j['cut']}-attempt-{j['attempt']}.jsonl")
+
+    def jobs_dir(j):
+        from .jobs import job_dir
+        return job_dir(projects.paths(j["project_id"]), j["id"])
+
+    async def api_claude(request):
+        """Which Claude authentication is used and whether the subscription token runs out soon."""
+        info = {"executor": cfg.executor, "kind": None, "token_expires": cfg.token_expires or None, "warn": False}
+        try:
+            if cfg.executor == "runner":
+                info.update(await anyio.to_thread.run_sync(executor.status))
+            else:
+                info["kind"] = config_mod.claude_auth().kind
+        except (RunnerError, config_mod.ConfigError) as e:
+            info["error"] = str(e)
+        if info.get("kind") == "oauth" and cfg.token_expires:
+            import datetime
+            days = (datetime.date.fromisoformat(cfg.token_expires) - datetime.date.today()).days
+            info.update(days_left=days, warn=days < 30)
+        return JSONResponse(info)
+
     async def delete_project(request):
         p = project_or_404(request.path_params["pid"])
         form = await read_form(request)
         if form.get("confirm") != p["name"]:
             return page(request, "footage.html", project=p, delete_error=True)
+        await anyio.to_thread.run_sync(jobs.cancel_project, p["id"])
         await anyio.to_thread.run_sync(worker.cancel, p["id"])
         await anyio.to_thread.run_sync(projects.delete, p["id"])
         log.info("project %s deleted", p["id"])
@@ -285,12 +393,14 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
 
         async with anyio.create_task_group() as tg:
             tg.start_soon(housekeeping)
+            await anyio.to_thread.run_sync(jobs.start)
             n = await anyio.to_thread.run_sync(worker.resume)
             if n:
                 log.info("analysis resumes for %d projects", n)
             yield
             tg.cancel_scope.cancel()
             await anyio.to_thread.run_sync(worker.close)
+            await anyio.to_thread.run_sync(jobs.close)
 
     routes = [
         Route("/", home),
@@ -306,6 +416,12 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/projects/{pid}/analysis", api_analysis_start, methods=["POST"]),
         Route("/api/projects/{pid}/clips", api_clips, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/manifest", api_manifest),
+        Route("/api/projects/{pid}/briefing", api_briefing, methods=["GET", "PUT"]),
+        Route("/api/projects/{pid}/jobs", api_jobs, methods=["GET", "POST"]),
+        Route("/api/jobs/{jid}/events", api_job_events),
+        Route("/api/jobs/{jid}/raw", api_job_raw),
+        Route("/api/jobs/{jid}/{action}", api_job_action, methods=["POST"]),
+        Route("/api/claude", api_claude),
         Route("/api/projects/{pid}/folder", api_folder, methods=["POST"]),
         Route("/api/projects/{pid}/clips/{cid}/telemetry/{kind}", api_telemetry, methods=["PUT"]),
         Route("/healthz", healthz),
@@ -320,4 +436,5 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan,
                     exception_handlers={HTTPException: http_error})
     app.state.cfg, app.state.db, app.state.projects, app.state.tus, app.state.worker = cfg, db, projects, tus, worker
+    app.state.jobs = jobs
     return app
