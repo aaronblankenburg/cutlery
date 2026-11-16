@@ -44,10 +44,19 @@ def load(paths: ProjectPaths) -> dict:
 
 def save(paths: ProjectPaths, data: dict, t, project_name: str) -> None:
     write_atomic(paths.data / "briefing.json", json.dumps(data, ensure_ascii=False, indent=1).encode())
-    write_atomic(paths.data / "briefing.md", render(data, t, project_name).encode())
+    refresh(paths, t, project_name)
 
 
-def render(data: dict, t, project_name: str) -> str:
+def refresh(paths: ProjectPaths, t, project_name: str) -> None:
+    """Write briefing.md again (after the briefing or the files changed). Without a saved briefing there is none."""
+    from . import files
+
+    data = load(paths)
+    if data:
+        write_atomic(paths.data / "briefing.md", render(data, t, project_name, files.listing(paths)).encode())
+
+
+def render(data: dict, t, project_name: str, files: dict | None = None) -> str:
     lines = [f"# {t('briefing.md.title', name=project_name)}", "", t("briefing.md.note"), ""]
     for key in FIELDS:
         value = data.get(key)
@@ -56,6 +65,18 @@ def render(data: dict, t, project_name: str) -> str:
         if key == "music":
             value = t(f"briefing.music.{value}")
         lines += [f"## {t('briefing.' + key)}", "", value, ""]
+    files = files or {}
+    if files.get("storyboard"):
+        lines += [f"## {t('files.storyboard')}", "", *[f"- storyboard/{f['name']}" for f in files["storyboard"]], ""]
+    if files.get("images"):
+        lines += [f"## {t('files.images')}", "", *[f"- images/{f['name']}" for f in files["images"]], ""]
+    if files.get("music"):
+        lines += [f"## {t('files.music')}", "", t("briefing.md.music_note"), ""]
+        for f in files["music"]:
+            lic = f.get("license") or "other"
+            use = t("briefing.md.music_use") if lic != "other" else t("briefing.md.music_skip")
+            lines.append(f"- music/{f['name']}: {t('files.license.' + lic.replace(' ', '_').lower())} – {use}")
+        lines.append("")
     missing = [t("briefing." + k) for k in FIELDS if not data.get(k)]
     if missing:
         lines += [f"## {t('briefing.md.missing')}", "", ", ".join(missing), ""]

@@ -14,6 +14,7 @@ from cutlery.db import Database
 from cutlery.executor import LocalExecutor
 from cutlery.jobs import JobError, Jobs, job_dir, next_cut
 from cutlery.projects import Projects
+from test_sidecar import GOOD
 
 FAKE = str(FIXTURES / "fake_claude.py")
 
@@ -73,13 +74,16 @@ class Env:
         self.jobs = Jobs(self.cfg, self.db, self.projects, self.executor, notifier)
         self.jobs.start()
 
-    def project(self, name="Film", analysed=True, briefing=True):
+    def project(self, name="Film", analysed=True, briefing=True, footage=True):
         pid = self.projects.create(name)["id"]
         paths = self.projects.paths(pid)
+        if footage:
+            cid = self.projects.register(pid, GOOD)["id"]
+            self.projects.mark(pid, cid, "uploaded")
         if analysed:
             a = cutter_project.analysis_dir(paths)
             a.mkdir(parents=True, exist_ok=True)
-            (a / "clips.json").write_text(json.dumps([{"id": "C001"}]))
+            (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": GOOD["fingerprint"]}}]))
         if briefing:
             (paths.data / "briefing.md").write_text("# Briefing\n")
         return pid
@@ -132,8 +136,8 @@ def test_draft_runs_to_done(env, tmp_path, monkeypatch):
 
 def test_one_active_job_per_project_and_preconditions(env):
     with pytest.raises(JobError) as e:
-        env.jobs.create(env.project(analysed=False), "draft")
-    assert e.value.key == "jobs.error.no_analysis"
+        env.jobs.create(env.project(analysed=False, footage=False), "draft")
+    assert e.value.key == "jobs.error.no_footage"
     with pytest.raises(JobError) as e:
         env.jobs.create(env.project(briefing=False), "draft")
     assert e.value.key == "jobs.error.no_briefing"
@@ -145,6 +149,18 @@ def test_one_active_job_per_project_and_preconditions(env):
     with pytest.raises(JobError) as e:
         env.jobs.create(pid, "draft")
     assert e.value.key == "jobs.error.active"
+
+
+def test_a_draft_waits_until_the_analysis_is_done(env):
+    pid = env.project(analysed=False)
+    j = env.jobs.create(pid, "draft")                     # allowed before the analysis is ready
+    time.sleep(1.5)
+    assert env.jobs.get(j["id"])["state"] == "queued"
+    assert [e["reason"] for e in env.jobs.events(j["id"]) if e["kind"] == "waiting"] == ["analysis"]
+    a = cutter_project.analysis_dir(env.projects.paths(pid))
+    a.mkdir(parents=True, exist_ok=True)
+    (a / "clips.json").write_text('[{"id": "C001"}]')
+    assert env.wait(j["id"], "done")["state"] == "done"
 
 
 def test_next_cut_after_the_draft(env):
@@ -318,11 +334,13 @@ def test_api_briefing_jobs_and_events(client, app, cfg, monkeypatch):
     app.state.jobs.cfg = dataclasses.replace(app.state.jobs.cfg, claude_bin=FAKE)
     pid = TestProjects().create(client, "Island 2026")
     r = client.post(f"/api/projects/{pid}/jobs", json={"kind": "draft"}, headers={"Accept-Language": "de"})
-    assert r.status_code == 409 and r.json()["message"] == "Die Analyse ist noch nicht fertig."
+    assert r.status_code == 409 and r.json()["message"] == "Bitte füge zuerst das Footage hinzu."
+    cid = client.post(f"/api/projects/{pid}/clips", json=GOOD).json()["id"]
+    app.state.projects.mark(pid, cid, "uploaded")
     paths = app.state.projects.paths(pid)
     a = cutter_project.analysis_dir(paths)
     a.mkdir(parents=True)
-    (a / "clips.json").write_text('[{"id": "C001"}]')
+    (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": GOOD["fingerprint"]}}]))
     assert client.put(f"/api/projects/{pid}/briefing", json={"prompt": ""}).status_code == 422
     r = client.put(f"/api/projects/{pid}/briefing", headers={"Accept-Language": "de"},
                    json={"prompt": "Zwei Wochen Ringstraße.", "length": "ca. 10 Minuten", "music": "own_and_search"})

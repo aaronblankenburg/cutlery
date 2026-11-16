@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% set tab = 'status' %}
+{% block title %}{{ t('project.nav.status') }} – {{ project.name }}{% endblock %}
+{% block main %}
+{% include "_project_nav.html" %}
+{% set job = st.job %}
+{% set a = st.analysis %}
+<ol class="steps" aria-label="{{ t('steps.label') }}">
+  {% set upload_ok = st.usable and st.uploaded == st.usable %}
+  {% set analysis_ok = upload_ok and a.clips >= st.uploaded and a.state not in ('waiting', 'running') %}
+  {% set cutting = job and job.state in ('queued', 'running', 'paused') %}
+  <li class="{{ 'ok' if upload_ok else ('busy' if st.usable else '') }}"><span class="n">1</span><span class="label">{{ t('steps.upload') }}</span>
+    <span class="note">{{ t('steps.upload_note', done=st.uploaded, total=st.usable) }}</span></li>
+  <li class="{{ 'ok' if analysis_ok else ('bad' if a.state == 'failed' else ('busy' if st.uploaded else '')) }}"><span class="n">2</span><span class="label">{{ t('steps.analysis') }}</span>
+    <span class="note">{{ t('steps.analysis_done') if analysis_ok else t('ready.analysis_running', n=a.analysed) }}</span></li>
+  <li class="{{ ('bad' if job.state == 'paused' else 'busy') if cutting else ('ok' if st.cuts else '') }}"><span class="n">3</span><span class="label">{{ t('steps.cut') }}</span>
+    <span class="note">{{ t('jobs.state.' + job.state) if job else '–' }}</span></li>
+  <li class="{{ 'ok' if st.cuts else '' }}"><span class="n">4</span><span class="label">{{ t('steps.render') }}</span>
+    <span class="note">{{ t('steps.render_note') }}</span></li>
+  <li class="{{ 'busy' if st.cuts and st.open_comments else ('ok' if st.cuts else '') }}"><span class="n">5</span><span class="label">{{ t('steps.review') }}</span>
+    <span class="note">{{ cut_name(st.cuts[-1].id) if st.cuts else '–' }}</span></li>
+</ol>
+
+<div class="banner-card warn" id="pause-banner" hidden>
+  <span id="pause-text"></span>
+  <button class="button primary" type="button" id="job-resume">{{ t('jobs.resume') }}</button>
+</div>
+
+<div class="status-grid" id="jobs" data-project="{{ project.id }}">
+  <section class="card job-card">
+    <div class="job-head">
+      <div>
+        <h1 id="job-heading">{{ t('jobs.none_title') }}</h1>
+        <p class="small muted" id="job-meta">{{ t('jobs.none_note') }}</p>
+      </div>
+      <button class="button danger" type="button" id="job-cancel" hidden>{{ t('jobs.cancel') }}</button>
+    </div>
+    <div class="notice error" id="job-error" hidden></div>
+    <div class="job-log" role="log" aria-label="{{ t('jobs.log_label') }}" id="job-log"></div>
+    <details class="raw" id="job-raw-box" hidden>
+      <summary>{{ t('jobs.raw') }}</summary>
+      <p class="small muted">{{ t('jobs.raw_note') }} <a id="job-raw" href="#">{{ t('jobs.raw_download') }}</a></p>
+    </details>
+  </section>
+
+  <div class="side">
+    <section class="card">
+      <h2>{{ t('analysis.title') }}</h2>
+      <dl class="facts">
+        <div><dt>{{ t('analysis.fact.clips') }}</dt><dd>{{ t('analysis.fact.clips_value', n=facts.clips) }}</dd></div>
+        <div><dt>{{ t('analysis.fact.speech') }}</dt><dd><span class="js-duration" data-seconds="{{ facts.speech_s }}"></span></dd></div>
+        <div><dt>{{ t('analysis.fact.usable') }}</dt><dd><span class="js-duration" data-seconds="{{ facts.usable_s }}"></span></dd></div>
+        <div><dt>{{ t('analysis.fact.places') }}</dt><dd>{{ t('analysis.fact.places_value', n=facts.gps) }}</dd></div>
+      </dl>
+      {% if a.state == 'failed' %}<div class="notice error">{{ t('footage.analysis.failed', message=a.message or '') }}</div>{% endif %}
+      <a href="/projects/{{ project.id }}/analysis">{{ t('analysis.view') }}</a>
+    </section>
+
+    <section class="card" id="people" data-project="{{ project.id }}">
+      <div class="row between"><h2>{{ t('people.title') }}</h2><span class="pill">{{ t('people.private') }}</span></div>
+      <p class="small muted">{{ t('people.lead') }}</p>
+      {% if people %}
+      <div class="people">
+        {% for p in people %}
+        <div class="person">
+          {% if p.pictures %}<img src="/projects/{{ project.id }}/analysis/faces/{{ p.pictures[0] }}" alt="" width="40" height="40" loading="lazy">{% else %}<span class="face-empty"></span>{% endif %}
+          <span class="mono small">{{ p.id }}</span>
+          <label class="visually-hidden" for="person-{{ p.id }}">{{ t('people.name_for', id=p.id) }}</label>
+          <input type="text" id="person-{{ p.id }}" data-person="{{ p.id }}" value="{{ p.name }}" placeholder="{{ t('people.placeholder') }}" maxlength="60">
+          <span class="small muted">{{ p.seconds }} s</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="small" id="people-status" aria-live="polite"></p>
+      {% else %}<p class="small muted">{{ t('people.none') }}</p>{% endif %}
+    </section>
+
+    <section class="card">
+      <h2>{{ t('cuts.title') }}</h2>
+      {% if st.cuts %}
+      <ul class="cut-list">
+        {% for c in st.cuts|reverse %}
+        <li><a href="/projects/{{ project.id }}/review?cut={{ c.id }}">{{ cut_name(c.id) }}</a>
+          <span class="small muted"><span class="js-duration" data-seconds="{{ c.duration or 0 }}"></span> · {{ t('cuts.comments', n=c.entries, open=c.open) }}{% if c.locked %} · {{ t('cuts.locked') }}{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="small muted">{{ t('cuts.none') }}</p>{% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/js/status.js"></script>
+{% endblock %}

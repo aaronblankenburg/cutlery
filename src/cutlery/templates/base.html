@@ -15,6 +15,12 @@
       <a href="/" {% if nav == 'projects' %}aria-current="page"{% endif %}>{{ t('nav.projects') }}</a>
       <a href="/projects/new" {% if nav == 'new' %}aria-current="page"{% endif %}>{{ t('nav.new_project') }}</a>
     </nav>
+    <div class="header-status small">
+      {% if claude.kind == 'oauth' %}<span class="{% if claude.warn %}warn{% endif %}">{{ t('header.claude_oauth', date=claude.expires) if claude.expires else t('header.claude_oauth_nodate') }}</span>
+      {% elif claude.kind == 'api_key' %}<span>{{ t('header.claude_api_key') }}</span>
+      {% else %}<span class="error">{{ t('header.claude_none') }}</span>{% endif %}
+      <span>{{ t('header.queue', running=queue, queued=queued) if queue or queued else t('header.queue_empty') }}</span>
+    </div>
     <div class="lang-switch" role="group" aria-label="{{ t('nav.language') }}">
       {% for code, name in languages %}
       <a href="/lang/{{ code }}?next={{ request.url.path | urlencode }}" lang="{{ code }}" title="{{ name }}"
@@ -22,7 +28,8 @@
       {% endfor %}
     </div>
   </header>
-  <main>{% block main %}{% endblock %}</main>
+  {% if claude.warn %}<div class="banner warn" role="status">{{ t('claude.token_warning', days=claude.days, date=claude.expires) }}</div>{% endif %}
+  <main class="{% block main_class %}{% endblock %}">{% block main %}{% endblock %}</main>
   <footer class="site-footer">
     {% for d in disks %}
     <span class="disk{% if d.low %} low{% endif %}" data-bytes="{{ d.free }}">{{ t('disk.' + d.name) }}: <span class="js-size" data-bytes="{{ d.free }}">{{ (d.free / 1e9) | round(1) }} GB</span> {{ t('disk.free') }}{% if d.low %} · {{ t('disk.low') }}{% endif %}</span>

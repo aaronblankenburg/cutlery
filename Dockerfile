@@ -1,10 +1,9 @@
 # Cutlery: the web app on top of the cutter image (ffmpeg, FilmCraft CLI, cutter, Python 3.12).
 # Bump cutter: set CUTTER_IMAGE to the new tag and digest, rebuild, run the tests.
-# NOTE: Cutlery needs cutter 0.3.0 (stand-ins, export, non-interactive skill). Until that image is published, build
-# it from cutter's main branch and pass it:
+# To try unreleased cutter changes, build cutter's image and pass it:
 #   docker build -t cutter:main ../cutter && docker build --build-arg CUTTER_IMAGE=cutter:main -t cutlery:dev .
 ARG CLAUDE_CODE_VERSION=2.1.317
-ARG CUTTER_IMAGE=ghcr.io/aaronblankenburg/cutter:0.2.1@sha256:83043b620c13856d3306f2998abea642f5c18c1a6e06f33a88b6c769ce985c2d
+ARG CUTTER_IMAGE=ghcr.io/aaronblankenburg/cutter:0.3.0@sha256:e85aaa88b0f9144e648d92d1a0e6a4295f2b2466e7d9a1283b399dc877460b4e
 # Claude Code at a fixed version; the npm package brings the native binary, Node is not needed at run time.
 FROM node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS claude
 ARG CLAUDE_CODE_VERSION

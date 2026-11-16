@@ -4,23 +4,48 @@
 {% block main %}
 <div class="page-head">
   <div>
-    <h1>{{ t('projects.title') }}</h1>
+    <h1 class="display">{{ t('projects.title') }}</h1>
     <p>{{ t('projects.lead') }}</p>
   </div>
-  <div class="actions"><a class="button primary" href="/projects/new">{{ t('nav.new_project') }}</a></div>
+  <div class="actions"><a class="button primary" href="/projects/new">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+    {{ t('nav.new_project') }}</a></div>
 </div>
-{% if projects %}
-<div class="project-list">
-  {% for p in projects %}
-  <a class="project-row" href="/projects/{{ p.id }}/footage">
-    <div>
-      <h3>{{ p.name }}</h3>
-      <div class="meta">{{ t('projects.clips', n=p.clips) }} · <span class="js-duration" data-seconds="{{ p.duration or 0 }}"></span>{% if p.problems %} · {{ t('projects.problems', n=p.problems) }}{% endif %}</div>
+
+{% for c in cards if c.st.job and c.st.job.state == 'paused' %}
+<div class="banner-card warn">
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M10 9v6M14 9v6"></path></svg>
+  <span><strong>{{ t('projects.paused', name=c.p.name) }}</strong> – {{ t('projects.paused_reason.' + (c.st.job.reason or 'error')) }}</span>
+  <a class="button small-button" href="/projects/{{ c.p.id }}">{{ t('projects.to_project') }}</a>
+</div>
+{% endfor %}
+
+{% if cards %}
+<div class="project-grid">
+  {% for c in cards %}
+  {% set st = c.st %}
+  {% if st.job and st.job.state in ('paused', 'running', 'queued') %}{% set href = '/projects/' ~ c.p.id %}{% set action = 'projects.action.status' %}
+  {% elif st.cuts %}{% set href = '/projects/' ~ c.p.id ~ '/review' %}{% set action = 'projects.action.review' %}
+  {% else %}{% set href = '/projects/' ~ c.p.id ~ '/setup' %}{% set action = 'projects.action.setup' %}{% endif %}
+  <a class="project-card" href="{{ href }}">
+    <div class="stills" aria-hidden="true">
+      {% if st.analysis.clips %}{% for n in range(3) %}<img src="/projects/{{ c.p.id }}/thumb/{{ n }}" alt="" loading="lazy">{% endfor %}
+      {% else %}<div class="still-empty">{{ t('projects.no_still') }}</div><div></div><div></div>{% endif %}
     </div>
-    {% if p.clips and p.uploaded == p.clips - (p.problems or 0) %}<span class="pill ok">{{ t('projects.state.uploaded') }}</span>
-    {% elif p.clips %}<span class="pill warn">{{ t('projects.state.uploading', done=p.uploaded or 0, total=p.clips) }}</span>
-    {% else %}<span class="pill">{{ t('projects.state.empty') }}</span>{% endif %}
-    <span class="go">{{ t('projects.open') }} →</span>
+    <div class="body">
+      <div class="title-row"><h2>{{ c.p.name }}</h2><span class="pill {{ c.badge[1] }}">{{ t(c.badge[0], percent=((st.analysis.analysed * 100 // st.uploaded) if st.uploaded else 0)) }}</span></div>
+      <div class="meta">{{ t('projects.clips', n=st.usable) }} · <span class="js-duration" data-seconds="{{ st.duration_s }}"></span>{% if st.briefing.length %} · {{ t('projects.target', length=st.briefing.length) }}{% endif %}</div>
+      <div class="foot">
+        <span>
+          {%- if st.cuts -%}{{ t('projects.detail.cut', cut=cut_name(st.cuts[-1].id), n=st.open_comments) }}
+          {%- elif st.job -%}{{ cut_name(st.job.cut) }} · {{ t('jobs.state.' + st.job.state) }}
+          {%- elif not st.usable -%}{{ t('projects.state.empty') }}
+          {%- elif st.uploaded < st.usable -%}{{ t('projects.state.uploading', done=st.uploaded, total=st.usable) }}
+          {%- else -%}{{ t('projects.detail.analysis.' + (st.analysis.state or 'idle')) }}{%- endif -%}
+        </span>
+        <span class="go">{{ t(action) }} →</span>
+      </div>
+    </div>
   </a>
   {% endfor %}
 </div>

@@ -13,9 +13,9 @@ computer, and render the final film there.
 
 The UI is available in English and German.
 
-**Status:** in development. Milestone M1 is done: projects, browser transcoding to 360p with sidecar metadata,
-resumable upload, login, Docker image and compose file. Analysis, Claude Code jobs, review and export follow
-(see `docs/plan.md` and `docs/progress.md`).
+**Status:** in development (milestones M0–M5 of `docs/plan.md` done, see `docs/progress.md`): upload with browser
+transcoding, analysis, Claude Code jobs in isolated containers, review, export for Premiere Pro. Final Cut Pro,
+Resolve and FilmCraft exports, hardening and the self-hoster documentation follow.
 
 - `PROMPT.md` – the build brief for Claude Code
 - `CLAUDE.md` – standing notes for Claude Code

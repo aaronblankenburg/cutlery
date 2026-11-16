@@ -60,9 +60,13 @@ def job_dir(paths, job_id) -> pathlib.Path:
 
 
 class Jobs:
-    def __init__(self, cfg, db: Database, projects, executor, notifier=None):
+    def __init__(self, cfg, db: Database, projects, executor, notifier=None, ready=None):
         self.cfg, self.db, self.projects, self.executor = cfg, db, projects, executor
         self.notifier = notifier
+        # ready(project_id) -> None if a job of the project may start now, else why not (upload, analysis)
+        self.ready = ready or (lambda project_id: None if cutter_project.clips_json(projects.paths(project_id))
+                               else "analysis")
+        self.waiting: dict[str, str] = {}      # job id -> what it waits for (logged once)
         self.lock = threading.RLock()
         self.read_pos: dict[str, int] = {}     # job id -> bytes of the stream file already read
         self.results: dict[str, dict] = {}     # job id -> the result event of the current attempt
@@ -118,8 +122,8 @@ class Jobs:
             if kind == "draft":
                 if cuts:
                     raise JobError("the project has a cut already", "jobs.error.has_cut")
-                if not cutter_project.clips_json(paths):
-                    raise JobError("the footage is not analysed yet", "jobs.error.no_analysis")
+                if not self.projects.clips(project_id):
+                    raise JobError("there is no footage yet", "jobs.error.no_footage")
                 if not (paths.data / "briefing.md").is_file():
                     raise JobError("the briefing is missing", "jobs.error.no_briefing")
                 cut = "cut1"
@@ -221,6 +225,13 @@ class Jobs:
                     break
                 if j["project_id"] in busy:
                     continue
+                why = self.ready(j["project_id"])
+                if why:                                  # the draft starts when upload and analysis are done
+                    if self.waiting.get(j["id"]) != why:
+                        self.waiting[j["id"]] = why
+                        self._event(j["id"], {"kind": "waiting", "reason": why, "text": why})
+                    continue
+                self.waiting.pop(j["id"], None)
                 self._launch(j)
                 busy.add(j["project_id"])
                 free -= 1

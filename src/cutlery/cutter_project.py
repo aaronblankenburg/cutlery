@@ -43,8 +43,14 @@ def render(paths: ProjectPaths, title: str, language: str = "") -> str:
         f"work = {q(str(paths.work / 'cuts' / '{cut}' / 'work'))}",
         f"filmcraft_project = {q(str(paths.work / 'cuts' / '{cut}' / '{cut}.fcproj'))}",
         f"exports = {q(str(paths.work / 'exports'))}",
+        # the review: comments stay with the project (cutter's default .cutter/review/data), renders are regenerable
+        f"review_media = {q(str(review_media_dir(paths)))}",
         "",
     ])
+
+
+def review_media_dir(paths: ProjectPaths) -> pathlib.Path:
+    return paths.work / "review"
 
 
 def write(paths: ProjectPaths, title: str, language: str = "") -> pathlib.Path:

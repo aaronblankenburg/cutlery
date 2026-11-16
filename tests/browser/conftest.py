@@ -73,5 +73,5 @@ def new_project_api(page, server, name="Test"):
     page.goto(server["url"] + "/projects/new")
     page.fill("#name", name)
     page.click("button[type=submit]")
-    page.wait_for_url("**/footage")
+    page.wait_for_url("**/setup")
     return page.url.split("/")[-2]

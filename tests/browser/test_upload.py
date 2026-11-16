@@ -28,7 +28,7 @@ def new_project(page, server, name="Test"):
     page.goto(server["url"] + "/projects/new")
     page.fill("#name", name)
     page.click("button[type=submit]")
-    page.wait_for_url("**/footage")
+    page.wait_for_url("**/setup")
     page.wait_for_function("() => window.cutlery && window.cutlery.caps")
     return page.url.split("/")[-2]
 

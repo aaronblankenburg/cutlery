@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ t(title_key) }}{% endblock %}
+{% block main %}
+<div class="error-page">
+  <p class="mono muted">{{ status }}</p>
+  <h1>{{ t(title_key) }}</h1>
+  <p>{{ t(text_key) }}</p>
+  <a class="button" href="/">{{ t('error.home') }}</a>
+</div>
+{% endblock %}

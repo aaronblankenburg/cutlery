@@ -10,8 +10,8 @@ milestone (and before any model switch), so a fresh session can continue without
 | M2 – analysis on 360p with sidecar metadata | done (2026-11-16) | cutter change (a) on cutter branch `cutlery-support` (commits 63ed483, b8fee48; all cutter tests green). Cutlery: cutter.toml per project, incremental analysis worker (debounced, restart-safe, status UI), `CUTLERY_ANALYSIS_ARGS`. Threshold comparison: docs/standin-analysis.md (no changes needed). Change (f) (review renders in WORK) moves to M5. |
 | M3 – export with correct paths, round-trip test | done (2026-11-16), round trip in Premiere pending | cutter (branch `cutlery-support`, fd2eb74): paths.py (c), export.py + fcp7.py + titles.py (e), `cutter export`, golden Premiere XML. Cutlery: export page (path, re-check of the originals by fingerprint with relink, formats, ZIP with localized IMPORT-PREMIERE.txt and licences), integration test with the real cutter. Manual check: docs/nle-roundtrip.md. |
 | M4 – Claude Code jobs, non-interactive skill mode | done (2026-11-16) with a simulated claude; a run with a real Claude account is pending | cutter (main, 0.3.0): non-interactive skill mode, skill and docs in the image. Cutlery: briefing → briefing.md, job queue, `claude -p` with dontAsk + tool allowlist, stream-json → live log, pause on usage limit / auth with resume, webhook + MQTT, token expiry warning; runner service (Docker socket, isolated job containers, egress proxy with allowlist), analysis also through the runner. Tests: unit (fake claude), runner, stack test with Compose. |
-| M5 – review buttons, GUI, English and German UI | next (Sonnet 5.5) | |
-| M6 – FCPXML, Resolve and FilmCraft export | not started | |
+| M5 – review buttons, GUI, English and German UI | done (2026-11-16, on Opus 5.5 with the user's approval) | Pages after docs/design: projects (cards with stills, paused banner), new project (footage, briefing, files with music licences, readiness checklist; a draft can be queued early and waits for upload and analysis), status (steps, live job log, pause/resume, analysis facts, people naming, cuts), review on cutter's review API (comments, agent changes and assumptions, lock + next cut, export), analysis view (contact sheets, transcripts), error pages, phone layout. cutter 0.3.1 (local commit, not pushed): paths.review_media, decision kind in review data. |
+| M6 – FCPXML, Resolve and FilmCraft export | next (Opus 5.5) | |
 | M7 – deployment, hardening, docs for self-hosters | not started | |
 
 ## State for the next session
@@ -35,7 +35,7 @@ milestone (and before any model switch), so a fresh session can continue without
 - Two byte-identical files in the footage folder have the same fingerprint and become one clip.
 - The analysis runs inside the web container for now; M4 moves it into the runner's isolated container.
 - First run with a real Claude account (token or API key) – planned for after M4.
-- cutter 0.3.0 is on cutter's main branch; tagging v0.3.0 publishes the image Cutlery's Dockerfile should pin.
+- cutter 0.3.1 (review_media, decision kind) is committed locally on cutter main but not pushed (the push was blocked by the permission system).
 - Premiere round trip (docs/nle-roundtrip.md) has to be done on a Windows or Mac with Premiere.
 - Whisper (1.6 GB) is downloaded by the first real analysis run into `CUTLERY_MODELS_DIR`; not yet tested end to end.
 
@@ -49,8 +49,13 @@ milestone (and before any model switch), so a fresh session can continue without
   published) and `cutlery:fakeclaude` (tests/integration/Dockerfile.fakeclaude), then
   `CUTLERY_TEST_STACK_IMAGE=cutlery:fakeclaude pytest -m integration tests/integration/test_stack.py`.
 - Usage-limit reset times like "resets 3:45pm" are read in the server's time zone (TZ in .env).
-- Job log lines written by Cutlery itself ("draft cut1, model …") are English; translate them with the job page (M5).
 - The runner runs as root inside its container (it holds the Docker socket, which is root-equivalent anyway).
+
+- Project pages: /projects/<id> status, /setup footage+briefing+files, /review, /analysis, /export.
+  The review API is cutter's own handler (review.py adapter); comments in DATA/.cutter/review/data/feedback.sqlite,
+  renders in WORK/review/cuts (cutter ≥ 0.3.1) or next to the comments (0.3.0) – both are read.
+- WebKit browser tests still need `sudo apt-get install libavif16`.
+- Files opened in the Nextcloud app on a phone become read-only here (Nextcloud lock); `chmod u+w` is safe.
 
 ## Open questions
 

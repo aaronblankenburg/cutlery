@@ -87,11 +87,20 @@ def call(s, method, path, body=None, form=False):
 
 
 def project(s, name, scenario):
+    import hashlib
+    from test_sidecar import variant
+
     status, _, headers = call(s, "POST", "/projects/new", {"name": name}, form=True)
     pid = headers["location"].split("/")[2]
+    fp = {"size": 1000, "head_sha256": hashlib.sha256(pid.encode()).hexdigest(), "tail_sha256": "b" * 64}
+    status, body, _ = call(s, "POST", f"/api/projects/{pid}/clips", variant(size=1000, fingerprint=fp))
+    cid = json.loads(body)["id"]
+    subprocess.run(["docker", "exec", "cutlery-test-stack-cutlery-1", "python", "-c",
+                    "from cutlery import config as c; from cutlery.db import Database; from cutlery.projects import Projects;"
+                    f"cfg = c.load(); Projects(cfg, Database(cfg.database)).mark({pid!r}, {cid!r}, 'uploaded')"], check=True)
     a = s["dir"] / "work" / "projects" / pid / "analysis"
     a.mkdir(parents=True)
-    (a / "clips.json").write_text('[{"id": "C001"}]')
+    (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": fp}}]))
     (s["dir"] / "data" / "projects" / pid / ".fake-claude-scenario").write_text(scenario)
     assert call(s, "PUT", f"/api/projects/{pid}/briefing", {"prompt": "A test film."})[0] == 200
     return pid

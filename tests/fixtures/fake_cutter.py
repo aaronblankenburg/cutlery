@@ -31,8 +31,22 @@ if sys.argv[1:2] == ["export"]:
         {"cue": "M1", "title": "Song", "artist": "Band", "license": "CC BY 4.0", "source": "https://example.org/song",
          "file": "music/song.mp3"}]}))
     sys.exit(0)
+if sys.argv[1:3] == ["people", "name"]:
+    # cutter people name P1 "Anna": rename a person in people.json
+    project = pathlib.Path(os.environ["CUTTER_PROJECT"])
+    conf = tomllib.loads((project / "cutter.toml").read_text(encoding="utf-8"))
+    f = pathlib.Path(conf["paths"]["clips"]).parent / "people.json"
+    data = json.loads(f.read_text())
+    hit = next((p for p in data["people"] if p["id"] == sys.argv[3]), None)
+    if hit is None:
+        print(f"Error: {sys.argv[3]} is not in people.json", file=sys.stderr)
+        sys.exit(3)
+    hit["name"] = sys.argv[4]
+    f.write_text(json.dumps(data))
+    print(json.dumps({"id": hit["id"], "name": hit["name"]}))
+    sys.exit(0)
 if sys.argv[1:2] != ["analyze"]:
-    sys.exit("fake cutter: only analyze and export")
+    sys.exit("fake cutter: only analyze, export and people name")
 if os.environ.get("FAKE_CUTTER_LOG"):
     with open(os.environ["FAKE_CUTTER_LOG"], "a") as f:
         f.write(f"{os.getcwd()} {os.environ.get('CUTTER_PROJECT')}\n")

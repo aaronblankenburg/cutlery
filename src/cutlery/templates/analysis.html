@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% set tab = 'status' %}
+{% block title %}{{ t('analysis.page_title') }} – {{ project.name }}{% endblock %}
+{% block main %}
+{% include "_project_nav.html" %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('analysis.page_title') }}</h1>
+    <p>{{ t('analysis.page_lead') }}</p>
+  </div>
+  <div class="actions"><a class="button" href="/projects/{{ project.id }}">← {{ t('project.nav.status') }}</a></div>
+</div>
+
+{% if not clips %}
+<div class="empty">{{ t('analysis.none') }}</div>
+{% else %}
+<div class="analysis-filter">
+  <label for="filter" class="visually-hidden">{{ t('analysis.filter') }}</label>
+  <input type="search" id="filter" placeholder="{{ t('analysis.filter') }}" autocomplete="off">
+  <span class="small muted" id="filter-count">{{ t('analysis.count', n=clips|length) }}</span>
+</div>
+
+{% if overview_pages %}
+<details class="card">
+  <summary>{{ t('analysis.overview', n=overview_pages|length) }}</summary>
+  <div class="overview-pages">
+    {% for f in overview_pages %}<a href="/projects/{{ project.id }}/analysis/overview/{{ f }}" target="_blank" rel="noopener"><img src="/projects/{{ project.id }}/analysis/overview/{{ f }}" alt="{{ t('analysis.overview_page', n=loop.index) }}" loading="lazy"></a>{% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<div class="clip-cards" id="clip-cards">
+  {% for c in clips %}
+  <article class="card clip-card" data-search="{{ (c.id ~ ' ' ~ (c.rel_path or '') ~ ' ' ~ c.transcript)|lower }}">
+    <header>
+      <h2 class="mono">{{ c.id }}</h2>
+      <span class="small">{{ c.rel_path }}</span>
+      <span class="small muted"><span class="js-duration" data-seconds="{{ c.duration or 0 }}"></span>{% if c.created %} · {{ c.created[:16] }}{% endif %}{% if c.device %} · {{ c.device }}{% endif %}</span>
+    </header>
+    {% if c.sheet %}<a href="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" target="_blank" rel="noopener">
+      <img class="sheet" src="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" alt="{{ t('analysis.sheet_of', id=c.id) }}" loading="lazy"></a>{% endif %}
+    {% if c.transcript %}
+    <details><summary>{{ t('analysis.transcript', n=c.words or 0) }}</summary><p class="transcript">{{ c.transcript }}</p></details>
+    {% else %}<p class="small muted">{{ t('analysis.no_speech') }}</p>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+
+{% if quality %}
+<details class="card">
+  <summary>{{ t('analysis.quality') }}</summary>
+  <pre class="mono small quality">{{ quality }}</pre>
+</details>
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/js/analysis.js"></script>{% endblock %}

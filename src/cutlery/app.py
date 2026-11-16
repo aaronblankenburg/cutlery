@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import importlib.resources
 import json
 import logging
@@ -27,6 +28,8 @@ from .analysis import AnalysisWorker
 from .executor import LocalExecutor, RunnerClient, RunnerError
 from .jobs import JobError, Jobs
 from .notify import Notifier
+from . import overview, pages
+from .review import Reviews
 from .auth import BasicAuthMiddleware
 from .db import Database
 from .projects import NotFound, Projects
@@ -96,7 +99,27 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     projects = Projects(cfg, db)
     executor = RunnerClient(cfg.runner_socket) if cfg.executor == "runner" else LocalExecutor(cfg)
     worker = AnalysisWorker(cfg, db, projects, executor=executor if cfg.executor == "runner" else None)
-    jobs = Jobs(cfg, db, projects, executor, Notifier(cfg))
+    jobs = Jobs(cfg, db, projects, executor, Notifier(cfg),
+                ready=lambda pid: overview.ready(projects, worker, pid))
+    reviews = Reviews(cfg, db, projects)
+    claude_cache = {"t": 0.0, "info": None}
+
+    def claude_info():
+        """For the header: how Claude is reached and whether the token runs out soon (cached for a minute)."""
+        import time as _time
+        if _time.monotonic() - claude_cache["t"] < 60:
+            return claude_cache["info"]
+        info = {"kind": None, "warn": False, "expires": cfg.token_expires or None}
+        try:
+            info["kind"] = (executor.status()["kind"] if cfg.executor == "runner" else config_mod.claude_auth().kind)
+        except Exception:
+            info["kind"] = None
+        if info["kind"] == "oauth" and cfg.token_expires:
+            import datetime as _dt
+            info["days"] = (_dt.date.fromisoformat(cfg.token_expires) - _dt.date.today()).days
+            info["warn"] = info["days"] < 30
+        claude_cache.update(t=_time.monotonic(), info=info)
+        return info
     tus = TusApp(cfg, db, projects, on_stored=worker.request)
     templates = Jinja2Templates(directory=str(PKG / "templates"))
 
@@ -106,7 +129,10 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     def page(request: Request, name: str, **ctx):
         lang = lang_of(request)
         ctx.update(lang=lang, languages=i18n.languages(), version=__version__,
-                   t=lambda key, **v: i18n.translate(lang, key, **v), disks=disk_space(cfg))
+                   t=lambda key, **v: i18n.translate(lang, key, **v), disks=disk_space(cfg),
+                   claude=claude_info(), queue=jobs.running_count(),
+                   cut_name=lambda c: i18n.translate(lang, "cuts.name", n=(re.findall(r"\d+", str(c)) or [c])[-1]),
+                   queued=db.one("SELECT COUNT(*) AS n FROM jobs WHERE state='queued'")["n"])
         return templates.TemplateResponse(request, name, ctx)
 
     async def read_json(request: Request):
@@ -140,7 +166,11 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     # ------------------------------------------------------------ pages
 
     async def home(request):
-        return page(request, "projects.html", projects=projects.list())
+        cards = []
+        for p in projects.list():
+            st = await anyio.to_thread.run_sync(overview.state, projects, worker, jobs, reviews, projects.get(p["id"]))
+            cards.append({"p": p, "st": st, "badge": overview.badge(st)})
+        return page(request, "projects.html", cards=cards)
 
     async def new_project(request):
         if request.method == "POST":
@@ -149,12 +179,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
                 p = projects.create(str(form.get("name", "")))
             except ValueError:
                 return page(request, "project_new.html", error="new.name_missing")
-            return RedirectResponse(f"/projects/{p['id']}/footage", status_code=303)
+            return RedirectResponse(f"/projects/{p['id']}/setup", status_code=303)
         return page(request, "project_new.html", error=None)
-
-    async def footage(request):
-        p = project_or_404(request.path_params["pid"])
-        return page(request, "footage.html", project=p)
 
     async def export_page(request):
         p = project_or_404(request.path_params["pid"])
@@ -301,8 +327,10 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         p = project_or_404(request.path_params["pid"])
         form = await read_form(request)
         if form.get("confirm") != p["name"]:
-            return page(request, "footage.html", project=p, delete_error=True)
+            st = await anyio.to_thread.run_sync(overview.state, projects, worker, jobs, reviews, p)
+            return page(request, "setup.html", project=p, st=st, delete_error=True)
         await anyio.to_thread.run_sync(jobs.cancel_project, p["id"])
+        await anyio.to_thread.run_sync(reviews.forget, p["id"])
         await anyio.to_thread.run_sync(worker.cancel, p["id"])
         await anyio.to_thread.run_sync(projects.delete, p["id"])
         log.info("project %s deleted", p["id"])
@@ -378,9 +406,24 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         return JSONResponse({"ok": True})
 
     async def http_error(request, exc):
-        if request.url.path.startswith("/api/"):
+        if request.url.path.startswith("/api/") or "/review/api/" in request.url.path:
             return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
+        if "text/html" in request.headers.get("accept", ""):
+            known = exc.status_code in (404, 500)
+            r = page(request, "error.html", status=exc.status_code,
+                     title_key=f"error.title_{exc.status_code}" if known else "error.title",
+                     text_key=f"error.text_{exc.status_code}" if known else "error.text")
+            r.status_code = exc.status_code
+            return r
         return Response(f"{exc.status_code} {exc.detail}\n", status_code=exc.status_code, media_type="text/plain")
+
+    async def server_error(request, exc):
+        log.exception("request failed: %s", request.url.path)
+        if request.url.path.startswith("/api/") or "text/html" not in request.headers.get("accept", ""):
+            return JSONResponse({"error": "internal error"}, status_code=500)
+        r = page(request, "error.html", status=500, title_key="error.title_500", text_key="error.text_500")
+        r.status_code = 500
+        return r
 
     @contextlib.asynccontextmanager
     async def lifespan(app):
@@ -405,7 +448,6 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     routes = [
         Route("/", home),
         Route("/projects/new", new_project, methods=["GET", "POST"]),
-        Route("/projects/{pid}/footage", footage),
         Route("/projects/{pid}/delete", delete_project, methods=["POST"]),
         Route("/projects/{pid}/export", export_page),
         Route("/projects/{pid}/export", export_download, methods=["POST"]),
@@ -426,6 +468,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/projects/{pid}/clips/{cid}/telemetry/{kind}", api_telemetry, methods=["PUT"]),
         Route("/healthz", healthz),
         *tus.routes(),
+        *pages.routes(pages.Context(projects=projects, jobs=jobs, reviews=reviews, worker=worker, cfg=cfg, page=page,
+                                    read_json=read_json, project_or_404=project_or_404, lang_of=lang_of)),
         Mount("/static", app=StaticFiles(directory=str(PKG / "static")), name="static"),
     ]
     middleware = [
@@ -434,7 +478,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
                    health_token=health_token),
     ]
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan,
-                    exception_handlers={HTTPException: http_error})
+                    exception_handlers={HTTPException: http_error, Exception: server_error})
     app.state.cfg, app.state.db, app.state.projects, app.state.tus, app.state.worker = cfg, db, projects, tus, worker
-    app.state.jobs = jobs
+    app.state.jobs, app.state.reviews = jobs, reviews
     return app
