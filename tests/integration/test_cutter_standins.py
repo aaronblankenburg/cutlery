@@ -126,3 +126,33 @@ def test_premiere_package_points_to_the_originals(cfg, clips, tmp_path, monkeypa
         ("30", "TRUE", "DF")
     assert not any("/projects/" in f.findtext("pathurl") for f in files.values())   # never the server's copies
     assert "IMPORT-PREMIERE.txt" in z.namelist()
+
+    # the same cut for Final Cut Pro and for FilmCraft
+    req = export.check_request({"os": "macos", "root": "/Volumes/Card/Island 2026", "format": "fcp"}, ["cut1"])
+    zip_path = export.build(cfg2, paths, "Island 2026", req, "en")
+    z = zipfile.ZipFile(io.BytesIO(zip_path.read_bytes()))
+    zip_path.unlink()
+    fx = ET.fromstring(z.read(next(n for n in z.namelist() if n.endswith(".fcpxml"))))
+    assets = {a.get("name"): a for a in fx.iter("asset")}
+    a = assets["start timecode.mov"]
+    assert a.find("media-rep").get("src") == "file:///Volumes/Card/Island%202026/Day%202/start%20timecode.mov"
+    assert a.get("start") == "36000s"
+    fmt = next(f for f in fx.iter("format") if f.get("id") == a.get("format"))
+    assert fmt.get("width") == "1280"
+    assert "IMPORT-FINAL-CUT.txt" in z.namelist()
+
+    req = export.check_request({"os": "windows", "root": "D:\\Videos\\Island 2026", "format": "filmcraft"}, ["cut1"])
+    zip_path = export.build(cfg2, paths, "Island 2026", req, "de")
+    z = zipfile.ZipFile(io.BytesIO(zip_path.read_bytes()))
+    zip_path.unlink()
+    project = json.loads(z.read(next(n for n in z.namelist() if n.endswith(".fcproj"))))
+    media = [i["kind"]["Media"]["media"]["File"]["path"] for i in project["project"]["items"].values()
+             if "File" in (i["kind"].get("Media") or {}).get("media", {})]
+    assert sorted(media) == ["D:/Videos/Island 2026/Day 2/ntsc 29.97.mov", "D:/Videos/Island 2026/Day 2/start timecode.mov"]
+    assert "IN-FILMCRAFT-OEFFNEN.txt" in z.namelist()
+
+    # on the server the timeline plays the stand-ins: scaled for their size (640 wide), not the originals'
+    assert run_cutter(paths.data, paths.work, paths.sidecars, args=("timeline", "cut1")).returncode == 0
+    local = ET.parse(next((paths.work / "cuts").rglob("cut1.fcp7.xml"))).getroot()
+    scales = {float(p.findtext("value")) for p in local.iter("parameter") if p.findtext("parameterid") == "scale"}
+    assert scales == {300.0}

@@ -21,7 +21,7 @@ from .storage import ProjectPaths
 
 log = logging.getLogger("cutlery.export")
 
-FORMATS = {"premiere": {"ready": True}, "fcp": {"ready": False}, "resolve": {"ready": False}, "filmcraft": {"ready": False}}
+FORMATS = {"premiere": {"ready": True}, "fcp": {"ready": True}, "resolve": {"ready": True}, "filmcraft": {"ready": True}}
 OSES = ("windows", "macos", "linux")
 
 
@@ -88,7 +88,7 @@ def build(cfg, paths: ProjectPaths, title: str, req: dict, lang: str) -> pathlib
             for f in sorted(pkg.rglob("*")):
                 if f.is_file():
                     # audio and pictures are compressed already
-                    kind = zipfile.ZIP_STORED if f.suffix.lower() in (".png", ".mp3", ".m4a", ".ogg", ".opus", ".flac") else zipfile.ZIP_DEFLATED
+                    kind = zipfile.ZIP_STORED if f.suffix.lower() in (".png", ".mp3", ".m4a", ".ogg", ".opus", ".flac", ".jpg") else zipfile.ZIP_DEFLATED
                     z.write(f, f.relative_to(pkg).as_posix(), compress_type=kind)
         return target
     except subprocess.TimeoutExpired:
@@ -109,7 +109,7 @@ def readme_text(t, req, report, title):
              t("export.readme.where", folder=folder), "",
              t(f"export.readme.{req['format']}.steps", timeline=report.get("timeline", ""),
                srt=report.get("timeline", "").rsplit(".", 1)[0] + ".srt"), "",
-             t("export.readme.not_included"), ""]
+             t(f"export.readme.{req['format']}.not_included"), ""]
     if report.get("notes"):
         lines += [t("export.readme.notes"), *[f"- {n}" for n in report["notes"]], ""]
     lines.append(t("export.readme.footer"))

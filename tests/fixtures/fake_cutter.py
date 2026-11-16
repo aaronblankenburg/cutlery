@@ -23,11 +23,13 @@ if sys.argv[1:2] == ["export"]:
     out = pathlib.Path(args["--out"])
     (out / "music").mkdir(parents=True, exist_ok=True)
     relink = json.loads(pathlib.Path(args["--relink"]).read_text())
-    (out / f"Film_{sys.argv[2]}.xml").write_text(json.dumps({"os": args["--target-os"], "root": args["--target-root"],
-                                                            "relink": relink}))
+    suffix = {"premiere": ".xml", "fcp": ".fcpxml", "resolve": ".fcpxml", "filmcraft": ".fcproj"}[args["--to"]]
+    timeline = f"Film_{sys.argv[2]}{suffix}"
+    (out / timeline).write_text(json.dumps({"os": args["--target-os"], "root": args["--target-root"],
+                                            "relink": relink, "to": args["--to"]}))
     (out / "music" / "LICENSES.txt").write_text("english licences")
     (out / "music" / "song.mp3").write_bytes(b"ID3")
-    print(json.dumps({"timeline": f"Film_{sys.argv[2]}.xml", "notes": [], "music": [
+    print(json.dumps({"timeline": timeline, "notes": [], "music": [
         {"cue": "M1", "title": "Song", "artist": "Band", "license": "CC BY 4.0", "source": "https://example.org/song",
          "file": "music/song.mp3"}]}))
     sys.exit(0)

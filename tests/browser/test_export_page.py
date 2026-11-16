@@ -61,5 +61,5 @@ def test_check_originals_and_download(page, server, clips, tmp_path):
     path = dl.value.path()
     z = zipfile.ZipFile(path)
     timeline = json.loads(z.read("Film_cut1.xml"))               # what the fake cutter got
-    assert timeline == {"os": "windows", "root": "D:\\Videos\\Island 2026", "relink": result["relink"]}
+    assert timeline == {"os": "windows", "root": "D:\\Videos\\Island 2026", "relink": result["relink"], "to": "premiere"}
     assert dl.value.suggested_filename == "Island_2026_cut1_premiere.zip"

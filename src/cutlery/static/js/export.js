@@ -49,13 +49,15 @@ function tree() {
   const os = form.os.value;
   const sep = os === 'windows' ? '\\' : '/';
   const root = ($('root').value.trim() || $('root').placeholder).replace(/[\\/]+$/, '');
-  const fmt = form.querySelector('input[name=format]:checked');
+  const fmt = form.querySelector('input[name=format]:checked')?.value || 'premiere';
+  const timeline = { premiere: '*.xml', fcp: '*.fcpxml', resolve: '*.fcpxml', filmcraft: '*.fcproj' }[fmt];
   const lines = [
     `${root}${sep}`,
     `├─ …${sep}                ${$('tree').dataset.originals}`,
     `└─ _cutlery${sep}`,
-    `   ├─ *.xml`, `   ├─ *.srt`, `   ├─ titles${sep}`, `   ├─ maps${sep}`, `   ├─ music${sep}`,
-    `   └─ ${fmt && fmt.value === 'premiere' ? 'IMPORT-PREMIERE.txt' : 'README'}`,
+    `   ├─ ${timeline}`, `   ├─ *.srt`, ...(fmt === 'filmcraft' ? [] : [`   ├─ titles${sep}`]),
+    `   ├─ maps${sep}`, `   ├─ music${sep}`,
+    `   └─ ${t(`export.readme.${fmt}.file`)}`,
   ];
   $('tree').textContent = lines.join('\n');
 }

@@ -11,8 +11,8 @@ milestone (and before any model switch), so a fresh session can continue without
 | M3 – export with correct paths, round-trip test | done (2026-11-16), round trip in Premiere pending | cutter (branch `cutlery-support`, fd2eb74): paths.py (c), export.py + fcp7.py + titles.py (e), `cutter export`, golden Premiere XML. Cutlery: export page (path, re-check of the originals by fingerprint with relink, formats, ZIP with localized IMPORT-PREMIERE.txt and licences), integration test with the real cutter. Manual check: docs/nle-roundtrip.md. |
 | M4 – Claude Code jobs, non-interactive skill mode | done (2026-11-16) with a simulated claude; a run with a real Claude account is pending | cutter (main, 0.3.0): non-interactive skill mode, skill and docs in the image. Cutlery: briefing → briefing.md, job queue, `claude -p` with dontAsk + tool allowlist, stream-json → live log, pause on usage limit / auth with resume, webhook + MQTT, token expiry warning; runner service (Docker socket, isolated job containers, egress proxy with allowlist), analysis also through the runner. Tests: unit (fake claude), runner, stack test with Compose. |
 | M5 – review buttons, GUI, English and German UI | done (2026-11-16, on Opus 5.5 with the user's approval) | Pages after docs/design: projects (cards with stills, paused banner), new project (footage, briefing, files with music licences, readiness checklist; a draft can be queued early and waits for upload and analysis), status (steps, live job log, pause/resume, analysis facts, people naming, cuts), review on cutter's review API (comments, agent changes and assumptions, lock + next cut, export), analysis view (contact sheets, transcripts), error pages, phone layout. cutter 0.3.1 (local commit, not pushed): paths.review_media, decision kind in review data. |
-| M6 – FCPXML, Resolve and FilmCraft export | next (Opus 5.5) | |
-| M7 – deployment, hardening, docs for self-hosters | not started | |
+| M6 – FCPXML, Resolve and FilmCraft export | done (2026-11-16); round trips in the applications pending | cutter 0.4.0 (main ef866ce, not yet pushed): fcpxml.py (FCPXML 1.10, valid against Apple's DTD; stabilisation and noise reduction applied, captions, keyframes), `export --to fcp|resolve|filmcraft`, FilmCraft project built from an original-path timeline (offline on the server; round trip tested headless), stand-ins sized by their own picture in server timelines (fixes tiny review renders), FCP 7 file names no longer percent-encoded. Resolve gets FCPXML (decision in cutter docs/formats.md). Cutlery: all four formats on the export page, readme per application in en/de, tests, docs/nle-roundtrip.md. |
+| M7 – deployment, hardening, docs for self-hosters | next (Sonnet 5.5) | Before: push cutter 0.4.0, tag v0.4.0, pin the published image digest in Dockerfile. |
 
 ## State for the next session
 
@@ -35,7 +35,6 @@ milestone (and before any model switch), so a fresh session can continue without
 - Two byte-identical files in the footage folder have the same fingerprint and become one clip.
 - The analysis runs inside the web container for now; M4 moves it into the runner's isolated container.
 - First run with a real Claude account (token or API key) – planned for after M4.
-- cutter 0.3.1 (review_media, decision kind) is committed locally on cutter main but not pushed (the push was blocked by the permission system).
 - Premiere round trip (docs/nle-roundtrip.md) has to be done on a Windows or Mac with Premiere.
 - Whisper (1.6 GB) is downloaded by the first real analysis run into `CUTLERY_MODELS_DIR`; not yet tested end to end.
 
@@ -57,9 +56,20 @@ milestone (and before any model switch), so a fresh session can continue without
 - WebKit browser tests still need `sudo apt-get install libavif16`.
 - Files opened in the Nextcloud app on a phone become read-only here (Nextcloud lock); `chmod u+w` is safe.
 
+- M6: cutter 0.4.0 is committed on cutter main (ef866ce) but not pushed: SSH to GitHub was refused
+  ("Permission denied (publickey)") although the key is in the agent. Cutlery's Dockerfile still pins cutter 0.3.0,
+  which has no `--to fcp|resolve|filmcraft`: the export page offers them, so build with
+  `--build-arg CUTTER_IMAGE=cutter:main` (local `docker build -t cutter:main ../cutter`) until 0.4.0 is published.
+- FCPXML DTD check: save the DTD from Apple's "Document Type Definition" page (FCPXML reference) and set
+  `CUTTER_FCPXML_DTD`; the cutter image has no lxml, install it into a mounted folder (`pip install --target`).
+- The FilmCraft package has no title PNGs (FilmCraft makes titles natively); its rotation handling for portrait
+  originals is untested (the server builds the project without the files).
+
 ## Open questions
 
-- FilmCraft relink and FCPXML stabilisation support (M6).
+- Round trips in Final Cut Pro, DaVinci Resolve and FilmCraft (docs/nle-roundtrip.md), besides Premiere.
+- Does Resolve keep volume/opacity keyframes and captions from FCPXML? If not, Resolve should get the FCP 7 XML.
+
 - Face recognition at 360p (M2 measurement).
 - HEVC, 4K phone/drone clips, real GoPro GPS tracks and DJI .SRT: none in the available real footage (mostly
   720p and 4K H.264). Needs test material and a run in Safari (Mac) or Chrome on Windows.
