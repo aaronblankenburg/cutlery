@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/logo.svg" width="96" alt="Cutlery logo: a film strip cut in two"></p>
+<p align="center"><img src="assets/logo.svg" width="96" alt="Cutlery logo: fork and knife beside a film reel with a snipped strip of film"></p>
 
 # Cutlery
 
@@ -18,7 +18,7 @@ The UI is available in English and German (where it's called *SchnippSchnapp*).
 - `PROMPT.md` – the build brief for Claude Code
 - `CLAUDE.md` – standing notes for Claude Code
 - `docs/design/` – the agreed GUI designs (logo and variants, Projects, New project, Status, Review, Export; drawn in German)
-- `assets/` – logo (`logo.svg`, `favicon.svg`, `logo-mono.svg`): a film strip cut in two
+- `assets/` – logo (`logo.svg`, `favicon.svg`, `logo-mono.svg`): fork and knife beside a film reel instead of a plate
 
 ## Building it
 

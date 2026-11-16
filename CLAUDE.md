@@ -14,6 +14,8 @@
   Changes that belong in cutter go into a branch there.
 - One user per instance. Auth to Claude: either CLAUDE_CODE_OAUTH_TOKEN (operator's personal use of their
   subscription) or ANTHROPIC_API_KEY – exactly one.
-- Logo: assets/logo.svg (variant C "film strip", chosen; docs/design/LogoVarianten.dc.html shows the rejected
-  alternatives A–H for reference only). Wordmarks: "Cut" + "lery" in the accent colour; German
-  "Schnipp" + "Schnapp" in the accent colour.
+- Logo: assets/logo.svg – fork left, knife right, and in place of a plate a film reel (rotated 10°) with a strip of
+  film running out of it, curving under the reel and snipped off at the end. favicon.svg is the same without the
+  film strip (for 16–32 px); logo-mono.svg is single-colour (currentColor). docs/design/Logo.dc.html is the
+  reference; the other Logo*.dc.html boards show rejected alternatives only. Wordmarks: "Cut" + "lery" in the
+  accent colour; German "Schnipp" + "Schnapp" in the accent colour.
