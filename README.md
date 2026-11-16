@@ -1,19 +1,31 @@
-# SchnippSchnapp
+<p align="center"><img src="assets/logo.svg" width="96" alt="Cutlery logo: a film strip cut in two"></p>
 
-Self-hosted web app for cutting films from your own footage in the browser – without uploading the originals.
-The browser transcodes every clip to 360p and uploads only those small copies plus their metadata; the server
-runs [cutter](https://github.com/aaronblankenburg/cutter) and Claude Code to cut drafts, you review them in the
-browser, and at the end you download a project for Premiere Pro, Final Cut Pro, DaVinci Resolve or FilmCraft that
-links to the original files on your computer.
+# Cutlery
+
+Self-hosted web app that cuts films from your own footage – in your browser, without uploading the originals.
+
+Your browser transcodes every clip to a small 360p copy and uploads only that plus the clip's metadata.
+The server analyses the footage with [cutter](https://github.com/aaronblankenburg/cutter) and lets Claude Code
+cut a draft from your prompt, storyboard, images and music. You review the draft in the browser and comment
+on it frame by frame; Claude Code cuts the next version. When you're happy, you download a project for
+Premiere Pro, Final Cut Pro, DaVinci Resolve or FilmCraft that links straight to the original files on your
+computer, and render the final film there.
+
+The UI is available in English and German (where it's called *SchnippSchnapp*).
 
 **Status:** planning. Nothing is built yet.
 
-- `PROMPT.md` – the build brief for Claude Code (German)
-- `docs/design/` – the agreed GUI designs (logo and variants, Projects, New project, Status, Review, Export)
+- `PROMPT.md` – the build brief for Claude Code
+- `CLAUDE.md` – standing notes for Claude Code
+- `docs/design/` – the agreed GUI designs (logo and variants, Projects, New project, Status, Review, Export; drawn in German)
 - `assets/` – logo (`logo.svg`, `favicon.svg`, `logo-mono.svg`): a film strip cut in two
 
-## Getting started
+## Building it
 
-Open this folder in Claude Code and say:
+Open this folder in Claude Code, switch to Opus in plan mode, and say:
 
-> Lies PROMPT.md und leg mir den Plan vor.
+> Read PROMPT.md and present the plan.
+
+## Licence
+
+MIT, like cutter.
