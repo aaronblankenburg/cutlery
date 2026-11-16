@@ -5,27 +5,77 @@
 #   CUTLERY_WORK_DIR    regenerable: 360p copies, analysis, renders, exports, temporary files of jobs
 #   CUTLERY_MODELS_DIR  downloaded models (Whisper, detection), shared by all projects
 # The directories must exist and belong to PUID:PGID; Cutlery refuses to start otherwise.
+#
+# Two services from the same image:
+#   cutlery  the web app, upload, analysis and job queue. No Docker socket, no Claude credential.
+#   runner   starts one isolated container per Claude Code job (only that project mounted, no network except its
+#            HTTPS egress proxy for an allowlist of hosts). It is the only service with the Docker socket and the
+#            credential file. The two talk over a Unix socket in the work tree.
 name: cutlery
+
+x-base: &base
+  image: ${CUTLERY_IMAGE:-ghcr.io/aaronblankenburg/cutlery:latest}
+  init: true
+  restart: unless-stopped
+  environment: &env
+    CUTLERY_PORT: "8080"
+    CUTLERY_EXECUTOR: runner
+    CUTLERY_TRUSTED_PROXIES: ${CUTLERY_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,172.16.0.0/12}
+    CUTLERY_DISK_WARN_GB: ${CUTLERY_DISK_WARN_GB:-20}
+    CUTLERY_ANALYSIS_PARALLEL: ${CUTLERY_ANALYSIS_PARALLEL:-1}
+    CUTLERY_ANALYSIS_SETTLE_SECONDS: ${CUTLERY_ANALYSIS_SETTLE_SECONDS:-20}
+    CUTLERY_ANALYSIS_ARGS: ${CUTLERY_ANALYSIS_ARGS:-}
+    CUTLERY_MODEL_DRAFT: ${CUTLERY_MODEL_DRAFT:-claude-opus-5-5}
+    CUTLERY_MODEL_NEXT: ${CUTLERY_MODEL_NEXT:-claude-opus-5-5}
+    CUTLERY_MAX_TURNS: ${CUTLERY_MAX_TURNS:-400}
+    CUTLERY_JOBS_PARALLEL: ${CUTLERY_JOBS_PARALLEL:-1}
+    CUTLERY_JOB_TIMEOUT_HOURS: ${CUTLERY_JOB_TIMEOUT_HOURS:-8}
+    CUTLERY_CLAUDE_TOKEN_EXPIRES: ${CUTLERY_CLAUDE_TOKEN_EXPIRES:-}
+    CUTLERY_PUBLIC_URL: ${CUTLERY_PUBLIC_URL:-}
+    CUTLERY_WEBHOOK_URL: ${CUTLERY_WEBHOOK_URL:-}
+    CUTLERY_MQTT_HOST: ${CUTLERY_MQTT_HOST:-}
+    CUTLERY_MQTT_PORT: ${CUTLERY_MQTT_PORT:-1883}
+    CUTLERY_MQTT_TOPIC: ${CUTLERY_MQTT_TOPIC:-cutlery/jobs}
+    CUTLERY_MQTT_USER: ${CUTLERY_MQTT_USER:-}
+    CUTLERY_MQTT_PASSWORD: ${CUTLERY_MQTT_PASSWORD:-}
+    TZ: ${TZ:-UTC}
+  volumes: &trees
+    - {type: bind, source: "${CUTLERY_DATA_DIR:?set CUTLERY_DATA_DIR in .env}", target: /data, bind: {create_host_path: false}}
+    - {type: bind, source: "${CUTLERY_WORK_DIR:?set CUTLERY_WORK_DIR in .env}", target: /work, bind: {create_host_path: false}}
+    - {type: bind, source: "${CUTLERY_MODELS_DIR:?set CUTLERY_MODELS_DIR in .env}", target: /models, bind: {create_host_path: false}}
 
 services:
   cutlery:
-    image: ${CUTLERY_IMAGE:-ghcr.io/aaronblankenburg/cutlery:latest}
+    <<: *base
     build: .
     user: "${PUID:?set PUID in .env}:${PGID:?set PGID in .env}"
-    init: true
-    restart: unless-stopped
-    environment:
-      CUTLERY_PORT: "8080"
-      CUTLERY_TRUSTED_PROXIES: ${CUTLERY_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,172.16.0.0/12}
-      CUTLERY_DISK_WARN_GB: ${CUTLERY_DISK_WARN_GB:-20}
-      CUTLERY_ANALYSIS_PARALLEL: ${CUTLERY_ANALYSIS_PARALLEL:-1}
-      CUTLERY_ANALYSIS_SETTLE_SECONDS: ${CUTLERY_ANALYSIS_SETTLE_SECONDS:-20}
-      CUTLERY_ANALYSIS_ARGS: ${CUTLERY_ANALYSIS_ARGS:-}
-      TZ: ${TZ:-UTC}
-    volumes:
-      - {type: bind, source: "${CUTLERY_DATA_DIR:?set CUTLERY_DATA_DIR in .env}", target: /data, bind: {create_host_path: false}}
-      - {type: bind, source: "${CUTLERY_WORK_DIR:?set CUTLERY_WORK_DIR in .env}", target: /work, bind: {create_host_path: false}}
-      - {type: bind, source: "${CUTLERY_MODELS_DIR:?set CUTLERY_MODELS_DIR in .env}", target: /models, bind: {create_host_path: false}}
     ports:
       # only on this machine by default; put a reverse proxy with HTTPS in front (examples/)
       - "${CUTLERY_BIND:-127.0.0.1}:${CUTLERY_PORT:-8080}:8080"
+    depends_on: [runner]
+
+  runner:
+    <<: *base
+    # root inside the container: it talks to the Docker socket (which is root-equivalent on the host anyway).
+    # It writes nothing into the storage trees except its socket; jobs run as PUID:PGID.
+    user: "0:0"
+    command: ["runner"]
+    healthcheck:
+      test: ["CMD", "test", "-S", "/work/.runner/runner.sock"]
+      interval: 30s
+      start_period: 20s
+    environment:
+      <<: *env
+      CUTLERY_JOB_USER: "${PUID}:${PGID}"
+      CUTLERY_EGRESS_ALLOW: ${CUTLERY_EGRESS_ALLOW:-}
+      CUTLERY_JOB_MEMORY_GB: ${CUTLERY_JOB_MEMORY_GB:-8}
+      # exactly one of the two, as a file (mode 600); see .env.example
+      CLAUDE_CODE_OAUTH_TOKEN_FILE: ${CLAUDE_CODE_OAUTH_TOKEN_FILE:+/run/secrets/claude-oauth-token}
+      ANTHROPIC_API_KEY_FILE: ${ANTHROPIC_API_KEY_FILE:+/run/secrets/anthropic-api-key}
+    volumes:
+      - {type: bind, source: "${CUTLERY_DATA_DIR}", target: /data, bind: {create_host_path: false}}
+      - {type: bind, source: "${CUTLERY_WORK_DIR}", target: /work, bind: {create_host_path: false}}
+      - {type: bind, source: "${CUTLERY_MODELS_DIR}", target: /models, bind: {create_host_path: false}}
+      - /var/run/docker.sock:/var/run/docker.sock
+      - {type: bind, source: "${CLAUDE_CODE_OAUTH_TOKEN_FILE:-/dev/null}", target: /run/secrets/claude-oauth-token, read_only: true}
+      - {type: bind, source: "${ANTHROPIC_API_KEY_FILE:-/dev/null}", target: /run/secrets/anthropic-api-key, read_only: true}

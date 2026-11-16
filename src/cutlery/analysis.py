@@ -5,7 +5,8 @@ seconds, then one `cutter analyze` runs for the whole project. cutter keeps IDs 
 already produced, so every run only does the new clips. Requests that arrive during a run cause one more run after it.
 At most `parallel` projects are analysed at the same time.
 
-The command runs inside this container for now; milestone M4 moves it into the runner's isolated container.
+With the runner (CUTLERY_EXECUTOR=runner) the command runs in an isolated container like the Claude jobs (it reads the
+user's uploads with ffmpeg); otherwise it runs as a child process of the web app.
 """
 from __future__ import annotations
 
@@ -24,8 +25,9 @@ log = logging.getLogger("cutlery.analysis")
 
 class AnalysisWorker:
     def __init__(self, cfg, db: Database, projects, *, settle: float | None = None, parallel: int | None = None,
-                 command: list[str] | None = None):
+                 command: list[str] | None = None, executor=None):
         self.cfg, self.db, self.projects = cfg, db, projects
+        self.executor = executor
         self.settle = cfg.analysis_settle_s if settle is None else settle
         self.command = command or [cfg.cutter_bin, "analyze", *cfg.analysis_args]
         self.slots = threading.Semaphore(parallel or cfg.analysis_parallel)
@@ -140,6 +142,34 @@ class AnalysisWorker:
             with self.lock:
                 self.jobs.pop(project_id, None)
 
+    def _run_isolated(self, project_id, paths, job, out) -> int:
+        """cutter analyze in a container of the runner; its output is appended to the project's analysis log."""
+        import secrets as _secrets
+        jid = _secrets.token_hex(8)
+        d = paths.work / "jobs" / jid
+        d.mkdir(parents=True, exist_ok=True)
+        stdout, stderr = d / "analysis.out", d / "analysis.err"
+        spec = {"job": jid, "project": project_id, "kind": "analysis", "argv": ["cutter", *self.command[1:]],
+                "cwd": str(paths.data), "stdout": str(stdout), "stderr": str(stderr),
+                "env": {"CUTTER_PROJECT": str(paths.data), "TMPDIR": str(paths.work / "tmp")}}
+        try:
+            self.executor.start(spec)
+            while True:
+                code = self.executor.poll(jid)
+                if code is not None:
+                    break
+                if job["cancel"]:
+                    self.executor.stop(jid)
+                    return -15
+                time.sleep(1)
+        finally:
+            for f in (stdout, stderr):
+                if f.exists():
+                    out.write(f.read_bytes())
+            import shutil
+            shutil.rmtree(d, ignore_errors=True)
+        return code
+
     def _run(self, project_id: str, job: dict) -> None:
         try:
             project = self.projects.get(project_id)
@@ -157,11 +187,14 @@ class AnalysisWorker:
             with open(logfile, "ab") as out:
                 out.write(f"\n=== {now()} {' '.join(self.command)}\n".encode())
                 out.flush()
-                proc = subprocess.Popen(self.command, cwd=paths.data, env=env, stdout=out, stderr=subprocess.STDOUT,
-                                        stdin=subprocess.DEVNULL)
-                with self.lock:
-                    job["proc"] = proc
-                code = proc.wait()
+                if self.executor is not None:
+                    code = self._run_isolated(project_id, paths, job, out)
+                else:
+                    proc = subprocess.Popen(self.command, cwd=paths.data, env=env, stdout=out, stderr=subprocess.STDOUT,
+                                            stdin=subprocess.DEVNULL)
+                    with self.lock:
+                        job["proc"] = proc
+                    code = proc.wait()
         except OSError as e:
             self._state(project_id, "failed", f"cannot run {self.command[0]}: {e.strerror}")
             log.error("project %s: cannot run %s: %s", project_id, self.command[0], e)

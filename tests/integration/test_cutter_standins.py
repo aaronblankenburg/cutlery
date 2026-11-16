@@ -66,6 +66,7 @@ def test_cutter_analyses_a_cutlery_project(cfg, clips, tmp_path):
     ntsc = found["ntsc 29.97.mov"]
     assert (ntsc["width"], ntsc["height"], ntsc["fps_raw"], ntsc["timecode"]) == (1280, 720, "30000/1001", "01:02:03;04")
     assert ntsc["standin"] == {"width": 640, "height": 360}
+    assert abs(ntsc["duration"] - 2.0) < 0.05
     assert ntsc["path"].startswith(str(paths.media)) and ntsc["original"]["size"] == (clips / "Day 2/ntsc 29.97.mov").stat().st_size
     portrait = found["portrait rotated.mp4"]
     assert (portrait["rotation"], portrait["width"], portrait["height"]) == (90, 720, 1280)   # ffprobe's convention

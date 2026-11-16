@@ -9,8 +9,8 @@ milestone (and before any model switch), so a fresh session can continue without
 | M1 – browser transcoding, sidecar, upload | done (2026-11-16) | Server (Starlette, SQLite, Basic Auth via cutter's review-app auth), tus upload with server-side ffprobe check, browser pipeline (Mediabunny 1.64.0, createImageBitmap scaling, WASM AAC fallback), sidecar format (docs/sidecar.md), Dockerfile + compose.yaml with start check. Feasibility on real footage: docs/m1-feasibility.md. |
 | M2 – analysis on 360p with sidecar metadata | done (2026-11-16) | cutter change (a) on cutter branch `cutlery-support` (commits 63ed483, b8fee48; all cutter tests green). Cutlery: cutter.toml per project, incremental analysis worker (debounced, restart-safe, status UI), `CUTLERY_ANALYSIS_ARGS`. Threshold comparison: docs/standin-analysis.md (no changes needed). Change (f) (review renders in WORK) moves to M5. |
 | M3 – export with correct paths, round-trip test | done (2026-11-16), round trip in Premiere pending | cutter (branch `cutlery-support`, fd2eb74): paths.py (c), export.py + fcp7.py + titles.py (e), `cutter export`, golden Premiere XML. Cutlery: export page (path, re-check of the originals by fingerprint with relink, formats, ZIP with localized IMPORT-PREMIERE.txt and licences), integration test with the real cutter. Manual check: docs/nle-roundtrip.md. |
-| M4 – Claude Code jobs, non-interactive skill mode | next (Opus 5.5) | cutter change (b), runner, egress. |
-| M5 – review buttons, GUI, English and German UI | not started | |
+| M4 – Claude Code jobs, non-interactive skill mode | done (2026-11-16) with a simulated claude; a run with a real Claude account is pending | cutter (main, 0.3.0): non-interactive skill mode, skill and docs in the image. Cutlery: briefing → briefing.md, job queue, `claude -p` with dontAsk + tool allowlist, stream-json → live log, pause on usage limit / auth with resume, webhook + MQTT, token expiry warning; runner service (Docker socket, isolated job containers, egress proxy with allowlist), analysis also through the runner. Tests: unit (fake claude), runner, stack test with Compose. |
+| M5 – review buttons, GUI, English and German UI | next (Sonnet 5.5) | |
 | M6 – FCPXML, Resolve and FilmCraft export | not started | |
 | M7 – deployment, hardening, docs for self-hosters | not started | |
 
@@ -34,6 +34,8 @@ milestone (and before any model switch), so a fresh session can continue without
   timing and one frame in count (ffmpeg re-bases the first shown frame to 0, Mediabunny keeps the exact offset).
 - Two byte-identical files in the footage folder have the same fingerprint and become one clip.
 - The analysis runs inside the web container for now; M4 moves it into the runner's isolated container.
+- First run with a real Claude account (token or API key) – planned for after M4.
+- cutter 0.3.0 is on cutter's main branch; tagging v0.3.0 publishes the image Cutlery's Dockerfile should pin.
 - Premiere round trip (docs/nle-roundtrip.md) has to be done on a Windows or Mac with Premiere.
 - Whisper (1.6 GB) is downloaded by the first real analysis run into `CUTLERY_MODELS_DIR`; not yet tested end to end.
 
@@ -41,6 +43,14 @@ milestone (and before any model switch), so a fresh session can continue without
   to them; the README and the licence file are localized. FCP 7 keyframe `<when>` is written relative to the media
   start (like in/out) – to be confirmed in the Premiere round trip. Stereo sound is one clipitem per clip.
 - Export runs `cutter export` in the web container (like the analysis, until M4's runner).
+
+- Jobs: tests/fixtures/fake_claude.py simulates claude (scenarios ok, usage_limit, auth, max_turns, crash, slow,
+  probe). Stack test: build `cutlery:dev` (with `--build-arg CUTTER_IMAGE=cutter:main` until cutter 0.3.0 is
+  published) and `cutlery:fakeclaude` (tests/integration/Dockerfile.fakeclaude), then
+  `CUTLERY_TEST_STACK_IMAGE=cutlery:fakeclaude pytest -m integration tests/integration/test_stack.py`.
+- Usage-limit reset times like "resets 3:45pm" are read in the server's time zone (TZ in .env).
+- Job log lines written by Cutlery itself ("draft cut1, model …") are English; translate them with the job page (M5).
+- The runner runs as root inside its container (it holds the Docker socket, which is root-equivalent anyway).
 
 ## Open questions
 

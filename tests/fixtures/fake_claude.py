@@ -29,6 +29,8 @@ if os.environ.get("FAKE_CLAUDE_LOG"):
                             "config_dir": os.environ.get("CLAUDE_CONFIG_DIR"),
                             "nonessential": os.environ.get("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC")}) + "\n")
 scenario = os.environ.get("FAKE_CLAUDE_SCENARIO", "ok")
+if pathlib.Path(".fake-claude-scenario").is_file():          # tests of the isolated container set it in the project
+    scenario = pathlib.Path(".fake-claude-scenario").read_text().strip()
 prompt = argv[argv.index("-p") + 1] if "-p" in argv else ""
 model = argv[argv.index("--model") + 1] if "--model" in argv else "claude-opus-5-5"
 m = re.search(r"\b(cut\d+)\b", prompt)
@@ -49,6 +51,47 @@ emit({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_
 emit({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "t2", "name": "Bash",
                                                     "input": {"command": "cutter analyze --json"}}]}})
 
+if scenario == "probe":
+    # what the job container can do, as a result for the tests of the runner's isolation
+    import socket
+    import urllib.parse
+
+    def connect(host, port):
+        try:
+            socket.create_connection((host, port), timeout=5).close()
+            return "open"
+        except OSError as e:
+            return type(e).__name__
+
+    def via_proxy(host):
+        proxy = urllib.parse.urlsplit(os.environ.get("HTTPS_PROXY", ""))
+        if not proxy.hostname:
+            return "no proxy"
+        try:
+            with socket.create_connection((proxy.hostname, proxy.port), timeout=10) as sock:
+                sock.sendall(f"CONNECT {host}:443 HTTP/1.1\r\nHost: {host}:443\r\n\r\n".encode())
+                return sock.recv(64).decode().split("\r\n")[0]
+        except OSError as e:
+            return type(e).__name__
+
+    def writable(path):
+        try:
+            pathlib.Path(path, ".probe").write_text("x")
+            pathlib.Path(path, ".probe").unlink()
+            return True
+        except OSError:
+            return False
+
+    facts = {"uid": os.getuid(), "gid": os.getgid(), "secret_var": sorted(k for k in os.environ if k in (
+                 "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN")),
+             "secret_len": len(os.environ.get("ANTHROPIC_API_KEY", "")),
+             "projects_seen": sorted(os.listdir("/data/projects")), "docker_sock": os.path.exists("/var/run/docker.sock"),
+             "root_writable": writable("/usr"), "project_writable": writable("."),
+             "models_writable": writable("/models"), "direct_internet": connect("1.1.1.1", 443),
+             "proxy_denied": via_proxy("example.com"), "proxy_allowed": via_proxy("api.anthropic.com")}
+    emit({"type": "result", "subtype": "success", "is_error": False, "result": json.dumps(facts), "num_turns": 1,
+          "session_id": session})
+    sys.exit(0)
 if scenario == "slow":
     time.sleep(float(os.environ.get("FAKE_CLAUDE_SECONDS", "30")))
 if scenario == "crash":

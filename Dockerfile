@@ -1,17 +1,28 @@
 # Cutlery: the web app on top of the cutter image (ffmpeg, FilmCraft CLI, cutter, Python 3.12).
 # Bump cutter: set CUTTER_IMAGE to the new tag and digest, rebuild, run the tests.
-# NOTE: the stand-in support (cutter branch cutlery-support) is not in a cutter release yet. Until it is, build the
-# cutter image from that branch and pass it:  docker build -t cutter:cutlery-dev ../cutter &&
-#   docker build --build-arg CUTTER_IMAGE=cutter:cutlery-dev -t cutlery:dev .
+# NOTE: Cutlery needs cutter 0.3.0 (stand-ins, export, non-interactive skill). Until that image is published, build
+# it from cutter's main branch and pass it:
+#   docker build -t cutter:main ../cutter && docker build --build-arg CUTTER_IMAGE=cutter:main -t cutlery:dev .
+ARG CLAUDE_CODE_VERSION=2.1.317
 ARG CUTTER_IMAGE=ghcr.io/aaronblankenburg/cutter:0.2.1@sha256:83043b620c13856d3306f2998abea642f5c18c1a6e06f33a88b6c769ce985c2d
+# Claude Code at a fixed version; the npm package brings the native binary, Node is not needed at run time.
+FROM node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS claude
+ARG CLAUDE_CODE_VERSION
+RUN npm install -g --no-fund --no-audit "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
+ && cp "$(readlink -f "$(command -v claude)")" /claude \
+ && /claude --version
+
 FROM ${CUTTER_IMAGE}
 
 COPY pyproject.toml README.md LICENSE /opt/cutlery/
 COPY src /opt/cutlery/src
 RUN pip install /opt/cutlery \
  && cutlery --version
+COPY --from=claude /claude /usr/local/bin/claude
 COPY docker/entrypoint.sh /usr/local/bin/cutlery-entrypoint
-RUN chmod 755 /usr/local/bin/cutlery-entrypoint
+COPY docker/job.sh /usr/local/bin/cutlery-job
+RUN chmod 755 /usr/local/bin/cutlery-entrypoint /usr/local/bin/cutlery-job \
+ && claude --version
 
 ENV CUTLERY_DATA_DIR=/data CUTLERY_WORK_DIR=/work CUTLERY_MODELS_DIR=/models HF_HOME=/models \
     NUMBA_CACHE_DIR=/models/numba-cache TMPDIR=/work/tmp

@@ -1,0 +1,5 @@
+# The Cutlery image with a simulated claude, for the integration tests of the runner (tests/integration).
+ARG BASE=cutlery:dev
+FROM ${BASE}
+COPY tests/fixtures/fake_claude.py /usr/local/bin/claude
+RUN chmod 755 /usr/local/bin/claude

@@ -188,6 +188,7 @@ def ffprobe_sidecar(path, rel_path):
     fp = {"size": size, "head_sha256": hashlib.sha256(data[:1 << 20]).hexdigest(),
           "tail_sha256": hashlib.sha256(data[-(1 << 20):]).hexdigest()}
     return variant(rel_path=rel_path, file=rel_path.split("/")[-1], size=size, duration=float(v["duration"]),
+                   format_duration=float(info["format"]["duration"]),
                    fingerprint=fp,
                    video={"codec": "avc", "width": v["width"], "height": v["height"], "rotation": 0,
                           "r_frame_rate": v["r_frame_rate"], "avg_frame_rate": v["avg_frame_rate"],

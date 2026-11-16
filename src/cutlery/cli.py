@@ -22,6 +22,12 @@ def _serve(args):
                 log_level="info", access_log=False, timeout_keep_alive=75)
 
 
+def _runner(args):
+    from . import runner
+
+    runner.serve(config_mod.load())
+
+
 def _set_password(args):
     from .auth import PasswordError, set_single_user
 
@@ -68,6 +74,8 @@ def main(argv=None):
     p.add_argument("--host")
     p.add_argument("--port", type=int)
     p.set_defaults(func=_serve)
+    p = sub.add_parser("runner", help="run the job runner (needs the Docker socket and the Claude credential)")
+    p.set_defaults(func=_runner)
     p = sub.add_parser("set-password", help="set the login (there is exactly one user)")
     p.add_argument("--user", default="cutlery", help="user name for the login (default: cutlery)")
     p.add_argument("--generate", action="store_true", help="make a random password and print it once")
