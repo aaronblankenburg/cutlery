@@ -41,11 +41,11 @@ form.addEventListener('submit', async (e) => {
 // ------------------------------------------------------------------ files
 
 function renderFiles(list) {
-  for (const kind of ['storyboard', 'images', 'music']) {
+  for (const kind of ['storyboard', 'images', 'music', 'other']) {
     document.querySelector(`[data-count="${kind}"]`).textContent = t('files.count', { n: list[kind].length });
   }
   const ul = $('file-list');
-  ul.replaceChildren(...['storyboard', 'images'].flatMap((kind) => list[kind].map((f) => {
+  ul.replaceChildren(...['storyboard', 'images', 'other'].flatMap((kind) => list[kind].map((f) => {
     const li = document.createElement('li');
     const name = document.createElement('span');
     name.textContent = `${t('files.' + kind)} · ${f.name} · ${fmtSize(f.size)}`;

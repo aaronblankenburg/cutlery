@@ -96,11 +96,13 @@ class TestFiles:
         assert r.json()["music"][0]["license"] == "own"
         client.put(f"/api/projects/{pid}/files/music/road.mp3", content=b"ID3", headers={"Accept-Language": "de"})
         client.put(f"/api/projects/{pid}/files/storyboard/plan.pdf", content=b"%PDF", headers={"Accept-Language": "de"})
+        client.put(f"/api/projects/{pid}/files/other/route.gpx", content=b"<gpx/>", headers={"Accept-Language": "de"})
         md = (cfg.data_dir / "projects" / pid / "briefing.md").read_text()
         assert "music/nordlicht demo.wav: Eigene Musik – verwendbar" in md
         assert "music/road.mp3: Andere / unklar – nicht verwenden" in md and "storyboard/plan.pdf" in md
         state = client.get(f"/api/projects/{pid}/state").json()
         assert state["music_unclear"] == 1 and len(state["files"]["storyboard"]) == 1
+        assert "other/route.gpx" in md and state["files"]["other"][0]["name"] == "route.gpx"     # any file type
         assert client.delete(f"/api/projects/{pid}/files/music/road.mp3").json()["music"][0]["name"] == "nordlicht demo.wav"
 
     @pytest.mark.parametrize("kind, name", [("music", "x.exe"), ("images", "../x.png"), ("secrets", "a.png")])

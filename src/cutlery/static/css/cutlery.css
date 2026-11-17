@@ -80,7 +80,7 @@ code, .mono { font-family: var(--font-mono); font-size: var(--text-sm); }
   font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg);
 }
 .wordmark:hover { color: var(--text); }
-.wordmark img { width: 30px; height: 30px; }
+.wordmark img { width: 36px; height: 36px; }   /* logo.svg with the film strip; favicon.svg is only for 16-32 px */
 .wordmark .accent { color: var(--accent); }
 .site-nav { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .site-nav a {

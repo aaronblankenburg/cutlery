@@ -431,5 +431,21 @@
   "footage.preparing": "Umwandlung wird vorbereitet …",
   "footage.error.no_videos": "Keine der {n} Dateien in diesem Ordner ist ein Video, das Cutlery lesen kann (MP4, MOV, MTS, MKV, AVI, MXF, WebM …). Wähle den Ordner mit deinen Clips.",
   "footage.restart": "Upload neu starten",
-  "footage.restart_hint": "Bricht ab, was gerade läuft, und geht den Ordner noch einmal durch. Hochgeladene Clips werden übersprungen, unterbrochene machen weiter."
+  "footage.restart_hint": "Bricht ab, was gerade läuft, und geht den Ordner noch einmal durch. Hochgeladene Clips werden übersprungen, unterbrochene machen weiter.",
+  "briefing.length.placeholder": "z. B. 7 Minuten oder 60 bis 90 Sekunden",
+  "files.other": "Sonstige Dateien",
+  "files.other.hint": "GPS-Tracks (GPX, KML), Notizen, alles andere",
+  "footage.facts.recorded": "Aufgenommen {range}",
+  "footage.facts.length": "{time} Material",
+  "footage.facts.space": "{total} auf dem Server (davon {standins} 360p-Kopien)",
+  "footage.stop": "Upload abbrechen",
+  "footage.col.actions": "Aktionen",
+  "footage.delete": "Löschen",
+  "footage.delete_clip": "{name} löschen",
+  "footage.delete_confirm": "{name} aus dem Projekt löschen? Die 360p-Kopie und die Analyse verschwinden, das Original auf deinem Rechner bleibt.",
+  "footage.delete_all": "Alle Clips löschen",
+  "footage.delete_all_confirm": "Alle {n} Clips aus dem Projekt löschen? Die 360p-Kopien und die Analyse verschwinden, die Originale auf deinem Rechner bleiben.",
+  "footage.analysis.stop": "Analyse anhalten",
+  "footage.analysis.stopped": "Analyse angehalten.",
+  "footage.analysis.continue": "Analyse fortsetzen"
 }

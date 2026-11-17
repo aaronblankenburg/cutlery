@@ -70,6 +70,8 @@ def render(data: dict, t, project_name: str, files: dict | None = None) -> str:
         lines += [f"## {t('files.storyboard')}", "", *[f"- storyboard/{f['name']}" for f in files["storyboard"]], ""]
     if files.get("images"):
         lines += [f"## {t('files.images')}", "", *[f"- images/{f['name']}" for f in files["images"]], ""]
+    if files.get("other"):
+        lines += [f"## {t('files.other')}", "", *[f"- other/{f['name']}" for f in files["other"]], ""]
     if files.get("music"):
         lines += [f"## {t('files.music')}", "", t("briefing.md.music_note"), ""]
         for f in files["music"]:

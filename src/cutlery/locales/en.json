@@ -431,5 +431,21 @@
   "footage.preparing": "Preparing the transcoding …",
   "footage.error.no_videos": "None of the {n} files in this folder is a video Cutlery can read (MP4, MOV, MTS, MKV, AVI, MXF, WebM …). Choose the folder with your clips.",
   "footage.restart": "Start upload again",
-  "footage.restart_hint": "Stops what is running and goes through the folder again. Uploaded clips are skipped, interrupted ones continue."
+  "footage.restart_hint": "Stops what is running and goes through the folder again. Uploaded clips are skipped, interrupted ones continue.",
+  "briefing.length.placeholder": "e.g. 7 minutes, or 60 to 90 seconds",
+  "files.other": "Other files",
+  "files.other.hint": "GPS tracks (GPX, KML), notes, anything else",
+  "footage.facts.recorded": "Recorded {range}",
+  "footage.facts.length": "{time} of footage",
+  "footage.facts.space": "{total} on the server ({standins} of it 360p copies)",
+  "footage.stop": "Stop upload",
+  "footage.col.actions": "Actions",
+  "footage.delete": "Delete",
+  "footage.delete_clip": "Delete {name}",
+  "footage.delete_confirm": "Delete {name} from the project? Its 360p copy and analysis go; the original on your computer stays.",
+  "footage.delete_all": "Delete all clips",
+  "footage.delete_all_confirm": "Delete all {n} clips from the project? The 360p copies and the analysis go; the originals on your computer stay.",
+  "footage.analysis.stop": "Stop analysis",
+  "footage.analysis.stopped": "Analysis stopped.",
+  "footage.analysis.continue": "Continue analysis"
 }

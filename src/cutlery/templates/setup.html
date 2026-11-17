@@ -18,6 +18,7 @@
         <div class="actions">
           <label class="button" for="folder-input" id="pick-folder">{{ t('footage.pick_other') if st.clips else t('footage.pick') }}</label>
           <input type="file" id="folder-input" webkitdirectory multiple hidden>
+          <button class="button" type="button" id="upload-stop" hidden>{{ t('footage.stop') }}</button>
           <button class="button" type="button" id="upload-restart" hidden title="{{ t('footage.restart_hint') }}">{{ t('footage.restart') }}</button>
         </div>
       </header>
@@ -39,14 +40,20 @@
               <th class="num hide-narrow">{{ t('footage.col.size') }}</th>
               <th class="num">{{ t('footage.col.small') }}</th>
               <th>{{ t('footage.col.status') }}</th>
+              <th><span class="visually-hidden">{{ t('footage.col.actions') }}</span></th>
             </tr></thead>
             <tbody></tbody>
           </table>
         </div>
         <p class="muted small" id="telemetry-note" hidden>{{ t('footage.telemetry_note') }}</p>
         <p class="small" id="analysis-text" aria-live="polite"></p>
-        <button class="button" type="button" id="analysis-retry" hidden>{{ t('footage.analysis.retry') }}</button>
+        <p class="small muted" id="footage-facts" hidden></p>
+        <div class="actions">
+          <button class="button" type="button" id="analysis-retry" hidden>{{ t('footage.analysis.retry') }}</button>
+          <button class="button" type="button" id="analysis-stop" hidden>{{ t('footage.analysis.stop') }}</button>
+        </div>
         <section id="analysis" hidden></section>
+        <div class="actions"><button class="button danger" type="button" id="clips-delete-all" hidden>{{ t('footage.delete_all') }}</button></div>
       </div>
     </section>
 
@@ -57,9 +64,8 @@
       <div class="grid-2">
         <div><label for="b-purpose">{{ t('briefing.purpose') }}</label><input type="text" id="b-purpose" name="purpose" maxlength="4000" value="{{ st.briefing.purpose or '' }}"></div>
         <div><label for="b-length">{{ t('briefing.length') }}</label>
-          <select id="b-length" name="length"><option value=""></option>
-            {% for n in (3, 5, 10, 20) %}{% set v = t('briefing.length.' ~ n) %}<option value="{{ v }}" {% if st.briefing.length == v %}selected{% endif %}>{{ v }}</option>{% endfor %}
-          </select></div>
+          <input type="text" id="b-length" name="length" maxlength="200" list="b-length-options" value="{{ st.briefing.length or '' }}" placeholder="{{ t('briefing.length.placeholder') }}">
+          <datalist id="b-length-options">{% for n in (3, 5, 10, 20) %}<option value="{{ t('briefing.length.' ~ n) }}"></option>{% endfor %}</datalist></div>
         <div><label for="b-style">{{ t('briefing.style') }}</label><input type="text" id="b-style" name="style" maxlength="4000" value="{{ st.briefing.style or '' }}"></div>
         <div><label for="b-music">{{ t('briefing.music') }}</label>
           <select id="b-music" name="music"><option value=""></option>
@@ -74,13 +80,13 @@
     <section class="card stack" id="files" data-project="{{ project.id }}">
       <header><h2>{{ t('files.title') }}</h2></header>
       <div class="file-kinds">
-        {% for kind in ('storyboard', 'images', 'music') %}
+        {% for kind in ('storyboard', 'images', 'music', 'other') %}
         <label class="file-kind" for="f-{{ kind }}">
           <span class="file-kind-name">{{ t('files.' + kind) }}</span>
           <span class="small muted">{{ t('files.' + kind + '.hint') }}</span>
           <span class="small" data-count="{{ kind }}">{{ t('files.count', n=st.files[kind]|length) }}</span>
           <input type="file" id="f-{{ kind }}" data-kind="{{ kind }}" multiple hidden
-                 accept="{{ {'storyboard': '.pdf,.txt,.md,image/*', 'images': 'image/*', 'music': 'audio/*,.flac'}[kind] }}">
+                 {% if kind != 'other' %}accept="{{ {'storyboard': '.pdf,.txt,.md,image/*', 'images': 'image/*', 'music': 'audio/*,.flac'}[kind] }}"{% endif %}>
         </label>
         {% endfor %}
       </div>

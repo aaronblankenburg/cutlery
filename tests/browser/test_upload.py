@@ -157,7 +157,7 @@ def test_reload_continues_without_redoing_finished_clips(page, server, clips, tm
         time.sleep(0.05)
     for path, status in before.items():
         if status == "uploaded":
-            assert "transcoding" not in seen.get(path, set()), path
+            assert not seen.get(path, set()) & {"reading", "transcoding", "uploading"}, path   # name + size: skipped
     clips_state = {c["rel_path"]: c["state"] for c in
                    page.evaluate(f"() => fetch('/api/projects/{pid}/clips').then(r => r.json())")["clips"]}
     assert set(clips_state.values()) == {"uploaded"}
@@ -253,3 +253,39 @@ def test_avchd_with_dolby_digital_sound(page, server, clips, tmp_path):
     sv = next(x for x in s["streams"] if x["codec_type"] == "video")
     assert sa["codec_name"] == "aac" and sa["channels"] == 2 and (sv["width"], sv["height"]) == (640, 360)
     assert abs(float(s["format"]["duration"]) - 2) < 0.1
+
+
+def test_stop_the_upload_and_delete_clips(page, server, clips, tmp_path):
+    if page.browser_name != "chrome":
+        pytest.skip("one browser is enough")
+    folder = tmp_path / "footage"
+    names = ("Day 1/2024-06-01 10-15-00 h264.mp4", "Phone/vfr.mp4")
+    for name in names:
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(clips / name, folder / name)
+    hung = []
+    page.context.route("**/tus/**", lambda route: hung.append(route))
+    pid = new_project(page, server)
+    page.on("dialog", lambda d: d.accept())
+    page.set_input_files("#folder-input", str(folder))
+    page.wait_for_selector("#upload-stop:visible")
+    end = time.time() + 60
+    while time.time() < end and not any(r["status"] == "uploading" for r in rows(page)):
+        page.wait_for_timeout(200)
+    page.click("#upload-stop")
+    assert page.is_hidden("#upload-stop")
+    assert {r["status"] for r in rows(page)} <= {"waiting", "uploaded"}, rows(page)
+    assert page.evaluate("() => window.cutlery.workers.every(w => !w.failed)")       # fresh workers for next time
+
+    page.context.unroute("**/tus/**")
+    page.click("#upload-restart")
+    wait_done(page)
+    page.click(f"[data-delete='{names[1]}']")
+    page.wait_for_function(f"() => !window.cutlery.rows.has({names[1]!r})")
+    api = lambda: page.evaluate(f"() => fetch('/api/projects/{pid}/clips').then(r => r.json())")["clips"]
+    assert [c["rel_path"] for c in api()] == [names[0]]
+    page.click("#clips-delete-all")
+    page.wait_for_function("() => window.cutlery.rows.size === 0")
+    assert api() == []
+    media = server["cfg"].work_dir / "projects" / pid / "media"
+    assert not list(media.rglob("*.mp4"))

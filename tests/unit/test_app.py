@@ -275,6 +275,34 @@ class TestTus:
         assert not any((cfg.work_dir / "uploads").iterdir())
 
 
+class TestDeleteFootage:
+    def test_one_clip_and_then_all(self, client, clips, cfg, tmp_path):
+        t = TestTus()
+        pid, cid, data = t.setup_project(client, clips, tmp_path)
+        assert t.patch(client, t.create_upload(client, pid, cid, len(data)), 0, data).status_code == 204
+        other = client.post(f"/api/projects/{pid}/clips", json=GOOD).json()["id"]
+        t.create_upload(client, pid, other, 10)                          # an unfinished upload goes too
+        media = cfg.work_dir / "projects" / pid / "media"
+        sidecars = cfg.data_dir / "projects" / pid / "sidecars"
+        assert client.delete(f"/api/projects/{pid}/clips/{cid}").json() == {"deleted": 1}
+        assert not list(media.rglob("*.mp4")) and not (sidecars / "Day 1/2024-06-01 10-15-00 h264.mp4.json").exists()
+        assert [c["id"] for c in client.get(f"/api/projects/{pid}/clips").json()["clips"]] == [other]
+        manifest = json.loads((cfg.data_dir / "projects" / pid / "manifest.json").read_text())
+        assert [c["id"] for c in manifest["clips"]] == [other]
+        assert client.delete(f"/api/projects/{pid}/clips/{cid}").status_code == 404
+        assert client.delete(f"/api/projects/{pid}/clips").json() == {"deleted": 1}
+        assert client.get(f"/api/projects/{pid}/clips").json()["clips"] == []
+        assert not any((cfg.work_dir / "uploads").iterdir())
+        assert client.get(f"/api/projects/{pid}/analysis").json()["state"] == "idle"
+
+    def test_stop_the_analysis(self, client):
+        pid = TestProjects().create(client)
+        assert client.post(f"/api/projects/{pid}/analysis/stop").json() == {"ok": True}
+        assert client.get(f"/api/projects/{pid}/analysis").json()["state"] == "stopped"
+        client.post(f"/api/projects/{pid}/analysis")
+        assert client.get(f"/api/projects/{pid}/analysis").json()["state"] in ("waiting", "running", "idle")
+
+
 class TestTranslations:
     def test_every_key_in_every_language(self):
         cats = i18n.catalogs()

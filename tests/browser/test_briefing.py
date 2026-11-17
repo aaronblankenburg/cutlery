@@ -12,9 +12,8 @@ def test_briefing_fields_are_kept(page, server, lang):
     pid = new_project(page, server)
     page.fill("#b-prompt", "A bike tour.")
     page.fill("#b-purpose", "Friends")
-    page.select_option("#b-length", index=3)
-    chosen = page.input_value("#b-length")
-    assert chosen
+    chosen = "7 1/2 min"                        # free text; the usual lengths are only suggestions
+    page.fill("#b-length", chosen)
     page.fill("#b-style", "lively")
     page.locator("#briefing button[type=submit]").click()
     page.wait_for_function("() => document.getElementById('briefing-status').textContent.trim() !== ''")

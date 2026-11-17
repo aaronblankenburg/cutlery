@@ -1,4 +1,5 @@
-"""Files the user adds to a project: storyboard, images and music (with a licence statement per track).
+"""Files the user adds to a project: storyboard, images, music (with a licence statement per track) and other files
+(GPS tracks such as GPX or KML, notes, anything else the agent may use).
 
 They live in the project folder in the data tree (storyboard/, images/, music/), where the agent finds them; music
 is where cutter expects it. The licence of each track is stored in music/licenses.json and written into briefing.md;
@@ -17,6 +18,7 @@ KINDS = {
     "storyboard": {"ext": {".pdf", ".txt", ".md", ".jpg", ".jpeg", ".png", ".webp", ".heic"}, "max": 200 * 1024 ** 2},
     "images": {"ext": {".jpg", ".jpeg", ".png", ".webp", ".heic", ".tif", ".tiff", ".svg"}, "max": 200 * 1024 ** 2},
     "music": {"ext": {".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".opus", ".aiff", ".aif"}, "max": 1024 ** 3},
+    "other": {"ext": None, "max": 1024 ** 3},          # any type
 }
 LICENSES = ("own", "CC BY 4.0", "CC0", "other")
 USABLE = {"own", "CC BY 4.0", "CC0"}
@@ -47,7 +49,7 @@ def check(kind: str, name: str, size: int) -> str:
     spec = KINDS.get(kind)
     if spec is None:
         raise FileError("unknown kind")
-    if pathlib.PurePosixPath(name).suffix.lower() not in spec["ext"]:
+    if spec["ext"] is not None and pathlib.PurePosixPath(name).suffix.lower() not in spec["ext"]:
         raise FileError("file type not accepted here")
     if size > spec["max"]:
         raise FileError("file too large")
@@ -77,8 +79,9 @@ def listing(paths) -> dict:
     out = {}
     for kind in KINDS:
         d = folder(paths, kind)
-        files = sorted(f for f in d.iterdir() if f.is_file() and pathlib.PurePosixPath(f.name).suffix.lower() in KINDS[kind]["ext"]) \
-            if d.is_dir() else []
+        ext = KINDS[kind]["ext"]
+        files = sorted(f for f in d.iterdir() if f.is_file() and not f.name.startswith(".")
+                       and (ext is None or pathlib.PurePosixPath(f.name).suffix.lower() in ext)) if d.is_dir() else []
         out[kind] = [{"name": f.name, "size": f.stat().st_size, **({"license": lic.get(f.name)} if kind == "music" else {})}
                      for f in files]
     return out

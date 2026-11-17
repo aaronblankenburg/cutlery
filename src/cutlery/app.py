@@ -428,8 +428,31 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         done = await anyio.to_thread.run_sync(cutter_project.progress, projects.paths(p["id"]))
         done.pop("fingerprints")
         uploaded = sum(1 for c in projects.clips(p["id"]) if c["state"] == "uploaded")
+        footage = await anyio.to_thread.run_sync(projects.footage_summary, p["id"])
         return JSONResponse({"state": p["analysis_state"], "message": p["analysis_message"], "updated": p["analysis_updated"],
-                             "uploaded": uploaded, **done})
+                             "uploaded": uploaded, **done, "footage": footage})
+
+    async def api_analysis_stop(request):
+        p = project_or_404(request.path_params["pid"])
+        await anyio.to_thread.run_sync(worker.stop, p["id"])
+        return JSONResponse({"ok": True})
+
+    async def api_clips_delete(request):
+        """DELETE /clips (all) or /clips/{cid}. Not while a cut is being made: the agent works with the footage."""
+        p = project_or_404(request.path_params["pid"])
+        if jobs.active(p["id"]):
+            return JSONResponse({"error": "a cut is being made; cancel it first"}, status_code=409)
+        cid = request.path_params.get("cid")
+        await anyio.to_thread.run_sync(worker.cancel, p["id"])
+        n = await anyio.to_thread.run_sync(projects.delete_clips, p["id"], [cid] if cid else None)
+        if cid and not n:
+            return JSONResponse({"error": "unknown clip"}, status_code=404)
+        if await anyio.to_thread.run_sync(projects.clips, p["id"]):
+            worker.request(p["id"])                  # clips.json without the deleted clips
+        else:
+            await anyio.to_thread.run_sync(worker.db_state_idle, p["id"])
+        log.info("project %s: %d clip(s) deleted", p["id"], n)
+        return JSONResponse({"deleted": n})
 
     async def api_analysis_start(request):
         p = project_or_404(request.path_params["pid"])
@@ -494,6 +517,9 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/projects/{pid}/analysis", api_analysis),
         Route("/api/projects/{pid}/analysis", api_analysis_start, methods=["POST"]),
         Route("/api/projects/{pid}/clips", api_clips, methods=["GET", "POST"]),
+        Route("/api/projects/{pid}/clips", api_clips_delete, methods=["DELETE"]),
+        Route("/api/projects/{pid}/clips/{cid}", api_clips_delete, methods=["DELETE"]),
+        Route("/api/projects/{pid}/analysis/stop", api_analysis_stop, methods=["POST"]),
         Route("/api/projects/{pid}/manifest", api_manifest),
         Route("/api/projects/{pid}/briefing", api_briefing, methods=["GET", "PUT"]),
         Route("/api/projects/{pid}/jobs", api_jobs, methods=["GET", "POST"]),

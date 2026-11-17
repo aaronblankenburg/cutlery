@@ -126,6 +126,8 @@ async function holdWakeLock() {
 document.addEventListener('visibilitychange', holdWakeLock);
 function setBusy(on) {
   busy = on;
+  $('upload-stop').hidden = !on;
+  for (const r of rows.values()) if (r.tr) render(r);      // delete buttons only while nothing runs
   if (on) holdWakeLock(); else { wakeLock?.release(); wakeLock = null; }
 }
 window.addEventListener('beforeunload', (e) => { if (busy) { e.preventDefault(); e.returnValue = ''; } });
@@ -161,7 +163,9 @@ function render(row) {
     <td class="hide-narrow small">${escape(describe(row.sidecar))}</td>
     <td class="num hide-narrow">${row.size ? fmtSize(row.size) : ''}</td>
     <td class="num">${row.standinSize ? fmtSize(row.standinSize) : ''}</td>
-    <td>${statusPill(row)}</td>`;
+    <td>${statusPill(row)}</td>
+    <td class="num">${row.clipId && !busy ? `<button class="link-button small" type="button" data-delete="${escape(row.relPath)}"
+      aria-label="${escape(t('footage.delete_clip', { name: row.relPath }))}" >${escape(t('footage.delete'))}</button>` : ''}</td>`;
   $('clip-table').hidden = false;
 }
 
@@ -389,14 +393,32 @@ function updateRestart() {
   $('upload-restart').hidden = !(lastFiles && open);
 }
 
-// Stop everything that runs (uploads, workers) and go through the folder again: done clips are skipped by the
-// server, transcoded ones are taken from OPFS, interrupted uploads continue where they stopped.
-function restart() {
-  if (!lastFiles) return;
+// Stop everything that runs: uploads, workers. Clips half done go back to "waiting" (they continue next time).
+function stopAll() {
   runToken++;
   for (const u of [...activeUploads]) u.abortRun();
   for (const w of [...workers]) stopWorker(w, 'stopped');
   if (probeWorker) stopWorker(probeWorker, 'stopped');
+  for (const r of rows.values()) {
+    if (['reading', 'transcoding', 'transcoded', 'uploading'].includes(r.status)) { r.status = 'waiting'; r.progress = 0; }
+  }
+  setBusy(false);
+  summary();
+}
+
+// A deleted clip: off the table, and its transcoded file and resume state out of the browser.
+function forgetRow(row) {
+  row.tr?.remove();
+  rows.delete(row.relPath);
+  if (row.sidecar?.fingerprint) dropState(row.sidecar.fingerprint).catch(() => {});
+  if (row.output?.opfs) call('remove', { name: row.output.opfs }, null, workers[0], IDLE.remove).catch(() => {});
+}
+
+// Stop everything that runs (uploads, workers) and go through the folder again: done clips are skipped by the
+// server, transcoded ones are taken from OPFS, interrupted uploads continue where they stopped.
+function restart() {
+  if (!lastFiles) return;
+  stopAll();
   run(lastFiles);
 }
 
@@ -438,6 +460,13 @@ async function run(fileList) {
   const prober = (async () => {
     for (const item of items) {
       if (token !== runToken) return;
+      // uploaded already under the same name with the same size: neither read nor upload it again. (Clips this
+      // browser could not read are read again: a newer Cutlery or browser may manage.)
+      const known = rows.get(item.relPath);
+      if (known?.clipId && known.status === 'uploaded' && known.size === item.file.size) {
+        known.item = item;
+        continue;
+      }
       try {
         const row = await registerClip(item);
         if (row.needsUpload) { queue.push(row); bytesTotal += item.file.size; }
@@ -511,15 +540,38 @@ async function showAnalysis() {
   try { a = await api(`/api/projects/${project}/analysis`); } catch { return; }
   const card = $('analysis');
   card.hidden = rows.size === 0 && !a.uploaded;
-  let text, failed = a.state === 'failed';
+  let text, failed = a.state === 'failed', stopped = a.state === 'stopped';
   if (failed) text = t('footage.analysis.failed', { message: a.message || '' });
+  else if (stopped) text = t('footage.analysis.stopped');
   else if (a.state === 'running') text = t('footage.analysis.running', a);
   else if (a.state === 'waiting') text = t('footage.analysis.waiting');
   else if (a.clips && a.clips >= a.uploaded) text = t('footage.analysis.done', a);
   else text = t('footage.analysis.idle');
   $('analysis-text').textContent = text;
-  $('analysis-retry').hidden = !failed;
+  const f = a.footage;
+  const facts = [];
+  if (f?.recorded_from) {
+    const from = new Date(f.recorded_from), to = new Date(f.recorded_to);
+    const fmt = new Intl.DateTimeFormat(document.documentElement.lang || undefined,
+      // cameras write their wall-clock time without a zone, which reads as UTC: show it as written
+      { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' });
+    facts.push(t('footage.facts.recorded', { range: fmt.formatRange ? fmt.formatRange(from, to) : `${fmt.format(from)} – ${fmt.format(to)}` }));
+  }
+  if (f?.footage_seconds) facts.push(t('footage.facts.length', { time: fmtDuration(f.footage_seconds) }));
+  if (f?.work_bytes || f?.standin_bytes) {
+    facts.push(t('footage.facts.space', { total: fmtSize(f.work_bytes || f.standin_bytes), standins: fmtSize(f.standin_bytes || 0) }));
+  }
+  $('footage-facts').textContent = facts.join(' · ');
+  $('analysis-stop').hidden = !['waiting', 'running'].includes(a.state);
+  $('clips-delete-all').hidden = !(a.uploaded || [...rows.values()].some((r) => r.clipId));
+  $('footage-facts').hidden = !facts.length;
+  $('analysis-retry').hidden = !(failed || stopped);
+  $('analysis-retry').textContent = t(stopped ? 'footage.analysis.continue' : 'footage.analysis.retry');
 }
+$('analysis-stop').addEventListener('click', async () => {
+  await api(`/api/projects/${project}/analysis/stop`, { method: 'POST' });
+  showAnalysis();
+});
 $('analysis-retry').addEventListener('click', async () => {
   await api(`/api/projects/${project}/analysis`, { method: 'POST' });
   showAnalysis();
@@ -532,6 +584,34 @@ await load();
 // The folder can be chosen at once; run() waits until the worker is ready.
 $('folder-input').addEventListener('change', (e) => run(e.target.files));
 $('upload-restart').addEventListener('click', restart);
+$('upload-stop').addEventListener('click', stopAll);
+$('clip-table').addEventListener('click', async (e) => {
+  const rel = e.target.closest('[data-delete]')?.dataset.delete;
+  const row = rel && rows.get(rel);
+  if (!row || busy || !confirm(t('footage.delete_confirm', { name: rel }))) return;
+  try {
+    await api(`/api/projects/${project}/clips/${row.clipId}`, { method: 'DELETE' });
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  forgetRow(row);
+  summary();
+  showAnalysis();
+});
+$('clips-delete-all').addEventListener('click', async () => {
+  if (busy || !confirm(t('footage.delete_all_confirm', { n: [...rows.values()].filter((r) => r.clipId).length }))) return;
+  try {
+    await api(`/api/projects/${project}/clips`, { method: 'DELETE' });
+  } catch (err) {
+    showError(err.message);
+    return;
+  }
+  for (const row of [...rows.values()]) forgetRow(row);
+  $('clip-table').hidden = true;
+  summary();
+  showAnalysis();
+});
 const ready = withTimeout(call('capabilities'), 30000).then((c) => { caps = c; return c; },
   (err) => {
     console.error('cutlery: transcoding worker', err);

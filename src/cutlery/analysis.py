@@ -50,6 +50,14 @@ class AnalysisWorker:
         self._state(project_id, "waiting")
         threading.Thread(target=self._loop, args=(project_id,), name=f"analysis-{project_id}", daemon=True).start()
 
+    def stop(self, project_id: str) -> bool:
+        """Stop the analysis because the user asked (it starts again with the next upload or "continue")."""
+        with self.lock:
+            known = project_id in self.jobs
+        self.cancel(project_id)
+        self._state(project_id, "stopped")
+        return known
+
     def cancel(self, project_id: str, timeout: float = 30) -> None:
         """Stop a running or waiting analysis (before the project is deleted) and wait until it has ended."""
         with self.lock:
@@ -87,6 +95,9 @@ class AnalysisWorker:
     def db_reset(self) -> None:
         with self.db.tx() as con:
             con.execute("UPDATE projects SET analysis_state='idle' WHERE analysis_state IN ('waiting','running')")
+
+    def db_state_idle(self, project_id: str) -> None:
+        self._state(project_id, "idle")
 
     def pending(self, project_id: str) -> bool:
         """True if an uploaded clip is not in clips.json yet."""

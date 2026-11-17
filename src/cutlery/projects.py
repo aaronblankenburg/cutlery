@@ -66,6 +66,36 @@ class Projects:
             (self.cfg.work_dir / "uploads" / u["id"]).unlink(missing_ok=True)
         self.paths(project_id).remove()
 
+    def delete_clips(self, project_id: str, clip_ids: list[str] | None = None) -> int:
+        """Delete clips (all with None): stand-ins, sidecars, telemetry, unfinished uploads, the database rows. The
+        next analysis run drops them from clips.json (cutter builds it from the stand-ins there are); with no clip
+        left, the analysis results go too. Returns the number deleted."""
+        self.get(project_id)
+        paths = self.paths(project_id)
+        clips = self.clips(project_id)
+        if clip_ids is not None:
+            wanted = set(clip_ids)
+            clips = [c for c in clips if c["id"] in wanted]
+        if not clips:
+            return 0
+        ids = [c["id"] for c in clips]
+        marks = ",".join("?" * len(ids))
+        uploads = self.db.all(f"SELECT id FROM uploads WHERE project_id=? AND clip_id IN ({marks})", (project_id, *ids))
+        with self.db.tx() as con:
+            con.execute(f"DELETE FROM uploads WHERE project_id=? AND clip_id IN ({marks})", (project_id, *ids))
+            con.execute(f"DELETE FROM clips WHERE project_id=? AND id IN ({marks})", (project_id, *ids))
+        for u in uploads:
+            (self.cfg.work_dir / "uploads" / u["id"]).unlink(missing_ok=True)
+        for c in clips:
+            for f in [paths.standin(c["rel_path"])] + [paths.sidecar(c["rel_path"], s) for s in (".json", ".gpmd", ".srt")]:
+                f.unlink(missing_ok=True)
+        if not self.clips(project_id):
+            from . import cutter_project
+            shutil.rmtree(cutter_project.analysis_dir(paths), ignore_errors=True)
+        self.write_manifest(project_id)
+        self.touch(project_id)
+        return len(clips)
+
     def set_folder(self, project_id: str, name: str) -> None:
         with self.db.tx() as con:
             con.execute("UPDATE projects SET footage_folder=? WHERE id=?", (name, project_id))
@@ -88,6 +118,34 @@ class Projects:
     def sidecar(self, project_id: str, clip: dict) -> dict:
         path = self.paths(project_id).sidecar(clip["rel_path"])
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def footage_summary(self, project_id: str) -> dict:
+        """What the uploaded clips amount to: their size on the server (stand-ins, and the project's work tree with
+        the analysis) and when they were recorded (first and last start, from the sidecars)."""
+        paths = self.paths(project_id)
+        uploaded = [c for c in self.clips(project_id) if c["state"] == "uploaded"]
+        starts, ends, footage = [], [], 0.0
+        for c in uploaded:
+            try:
+                sc = self.sidecar(project_id, c)
+            except (OSError, ValueError):
+                continue
+            footage += sc.get("duration") or 0
+            when = sc.get("creation_time") or sc.get("mtime")
+            if when:
+                starts.append(when)
+                ends.append(when)
+        work = 0
+        if paths.work.is_dir():
+            for f in paths.work.rglob("*"):
+                try:
+                    if f.is_file():
+                        work += f.stat().st_size
+                except OSError:
+                    pass
+        return {"standin_bytes": sum(c["standin_size"] or 0 for c in uploaded), "work_bytes": work,
+                "footage_seconds": round(footage, 1),
+                "recorded_from": min(starts) if starts else None, "recorded_to": max(ends) if ends else None}
 
     def register(self, project_id: str, raw) -> dict:
         """Store a clip's sidecar. The same fingerprint again returns the existing clip (resume after reload).

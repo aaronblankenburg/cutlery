@@ -79,6 +79,11 @@ milestone (and before any model switch), so a fresh session can continue without
 - 0.1.2 (2026-11-17): AVCHD (.MTS with AC-3 sound) via @mediabunny/ac3 (WebAssembly, loaded only when needed);
   durations of transport streams are end minus first timestamp, like ffprobe; the briefing's target length is saved
   (form.elements['length'] is the field count, not the field).
+- 0.1.3 (2026-11-17): header shows logo.svg (with the film strip); target length is free text with suggestions;
+  "Other files" (any type, e.g. GPX/KML) in other/, listed in briefing.md; analysis box shows recording span (camera
+  time as written, UTC), footage length and space on the server; uploaded clips are recognised by path and size and
+  not read again; delete one clip or all (DELETE /api/projects/{pid}/clips[/{cid}], refused while a cut runs);
+  "Stop upload"; "Stop analysis" (state `stopped`, continue with the retry button).
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions
