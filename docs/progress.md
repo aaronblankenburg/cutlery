@@ -92,6 +92,11 @@ milestone (and before any model switch), so a fresh session can continue without
   (label cutlery.kind, or the command for older ones) when it starts a new one. Each web restart (update) used to
   start another `cutter analyze` beside the old ones (four ran at once on the server). Status page facts are read
   live (image/ and transcripts/ files, sidecars for places) and show "n of m analysed" while the analysis runs.
+- 0.1.8 (2026-11-17): remaining analysis time (eta.py): per stage (sheets, transcripts, image analysis) the cost in
+  wall seconds per second of footage, from the file times of the running analysis, else from WORK/analysis-rates.json
+  or earlier runs; shown on the footage and status pages. No GPU for the analysis on the user's server: faster-whisper
+  needs NVIDIA/CUDA, the server has an Intel HD 6000 (i5-5250U, 2 cores). `CUTLERY_ANALYSIS_ARGS=--model small` is
+  the lever for speed.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

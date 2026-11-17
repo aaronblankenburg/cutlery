@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from . import briefing, cutter_project, files, i18n, overview
+from . import briefing, cutter_project, eta, files, i18n, overview
 from .jobs import JobError
 from .projects import NotFound
 
@@ -46,7 +46,8 @@ def routes(c: Context):
         paths = projects.paths(p["id"])
         facts = await anyio.to_thread.run_sync(overview.analysis_facts, projects, p["id"])
         people = await anyio.to_thread.run_sync(overview.people, paths)
-        return c.page(request, "status.html", project=p, st=st, facts=facts, people=people)
+        remaining = await anyio.to_thread.run_sync(eta.remaining, p, paths, c.cfg.work_dir)
+        return c.page(request, "status.html", project=p, st=st, facts=facts, people=people, remaining=remaining)
 
     async def setup_page(request):
         p = c.project_or_404(request.path_params["pid"])

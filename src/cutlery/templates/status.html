@@ -12,7 +12,7 @@
   <li class="{{ 'ok' if upload_ok else ('busy' if st.usable else '') }}"><span class="n">1</span><span class="label">{{ t('steps.upload') }}</span>
     <span class="note">{{ t('steps.upload_note', done=st.uploaded, total=st.usable) }}</span></li>
   <li class="{{ 'ok' if analysis_ok else ('bad' if a.state == 'failed' else ('busy' if st.uploaded else '')) }}"><span class="n">2</span><span class="label">{{ t('steps.analysis') }}</span>
-    <span class="note">{{ t('steps.analysis_done') if analysis_ok else t('ready.analysis_running', n=a.analysed) }}</span></li>
+    <span class="note">{{ t('steps.analysis_done') if analysis_ok else t('ready.analysis_running', n=a.analysed) }}{% if not analysis_ok and remaining %} · {{ t('steps.analysis_left') }} <span class="js-duration" data-seconds="{{ [remaining, 60]|max }}"></span>{% endif %}</span></li>
   <li class="{{ ('bad' if job.state == 'paused' else 'busy') if cutting else ('ok' if st.cuts else '') }}"><span class="n">3</span><span class="label">{{ t('steps.cut') }}</span>
     <span class="note">{{ t('jobs.state.' + job.state) if job else '–' }}</span></li>
   <li class="{{ 'ok' if st.cuts else '' }}"><span class="n">4</span><span class="label">{{ t('steps.render') }}</span>

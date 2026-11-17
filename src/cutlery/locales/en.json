@@ -454,5 +454,8 @@
   "analysis.lightbox.prev": "Previous",
   "analysis.lightbox.next": "Next",
   "analysis.lightbox.close": "Close",
-  "analysis.fact.clips_of": "{n} of {total} analysed"
+  "analysis.fact.clips_of": "{n} of {total} analysed",
+  "footage.analysis.remaining": "About {time} left.",
+  "footage.analysis.remaining_unknown": "Estimating the time left …",
+  "steps.analysis_left": "about"
 }

@@ -22,6 +22,7 @@ from starlette.templating import Jinja2Templates
 from . import __version__, i18n
 from . import config as config_mod
 from . import cutter_project
+from . import eta
 from . import export as export_mod
 from . import briefing as briefing_mod
 from .analysis import AnalysisWorker
@@ -429,8 +430,9 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         done.pop("fingerprints")
         uploaded = sum(1 for c in projects.clips(p["id"]) if c["state"] == "uploaded")
         footage = await anyio.to_thread.run_sync(projects.footage_summary, p["id"])
+        remaining = await anyio.to_thread.run_sync(eta.remaining, p, projects.paths(p["id"]), cfg.work_dir)
         return JSONResponse({"state": p["analysis_state"], "message": p["analysis_message"], "updated": p["analysis_updated"],
-                             "uploaded": uploaded, **done, "footage": footage})
+                             "uploaded": uploaded, **done, "footage": footage, "remaining_s": remaining})
 
     async def api_analysis_stop(request):
         p = project_or_404(request.path_params["pid"])

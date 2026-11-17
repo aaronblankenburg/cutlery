@@ -544,6 +544,10 @@ async function showAnalysis() {
   if (failed) text = t('footage.analysis.failed', { message: a.message || '' });
   else if (stopped) text = t('footage.analysis.stopped');
   else if (a.state === 'running') text = t('footage.analysis.running', a);
+  if (['running', 'waiting'].includes(a.state)) {
+    text += ' ' + (a.remaining_s != null ? t('footage.analysis.remaining', { time: fmtDuration(Math.max(60, a.remaining_s)) })
+      : t('footage.analysis.remaining_unknown'));
+  }
   else if (a.state === 'waiting') text = t('footage.analysis.waiting');
   else if (a.clips && a.clips >= a.uploaded) text = t('footage.analysis.done', a);
   else text = t('footage.analysis.idle');
