@@ -123,11 +123,14 @@ class TusApp:
         expires = (datetime.datetime.now(datetime.timezone.utc)
                    + datetime.timedelta(hours=self.cfg.upload_expiry_h)).isoformat(timespec="seconds")
         (self.dir / uid).touch()
-        with self.db.tx() as con:
-            con.execute("DELETE FROM uploads WHERE project_id=? AND clip_id=?", (clip["project_id"], clip["id"]))
-            con.execute("INSERT INTO uploads (id, project_id, clip_id, length, received, created, expires) "
-                        "VALUES (?,?,?,?,0,?,?)", (uid, clip["project_id"], clip["id"], length, now(), expires))
-        row = self.db.one("SELECT * FROM uploads WHERE id=?", (uid,))
+
+        def create():
+            with self.db.tx() as con:
+                con.execute("DELETE FROM uploads WHERE project_id=? AND clip_id=?", (clip["project_id"], clip["id"]))
+                con.execute("INSERT INTO uploads (id, project_id, clip_id, length, received, created, expires) "
+                            "VALUES (?,?,?,?,0,?,?)", (uid, clip["project_id"], clip["id"], length, now(), expires))
+            return self.db.one("SELECT * FROM uploads WHERE id=?", (uid,))
+        row = await anyio.to_thread.run_sync(create)
         return Response(status_code=201, headers=_headers({
             "Location": self.base + uid,
             "Upload-Expires": self._expires(row)}))
@@ -186,8 +189,7 @@ class TusApp:
                 log.error("upload %s: cannot write (%s)", uid, e)
                 return _error(507, "the server cannot store the upload")
             finally:
-                with self.db.tx() as con:
-                    con.execute("UPDATE uploads SET received=? WHERE id=?", (received, uid))
+                await anyio.to_thread.run_sync(self._set_received, uid, received)   # never block the event loop
             extra = {"Upload-Offset": str(received), "Upload-Expires": self._expires(row)}
             if received == row["length"]:
                 problem = await anyio.to_thread.run_sync(self._finish, row)
@@ -196,6 +198,10 @@ class TusApp:
                     return Response(problem + "\n", status_code=422, headers=_headers(extra),
                                     media_type="text/plain")
             return Response(status_code=204, headers=_headers(extra))
+
+    def _set_received(self, uid, received) -> None:
+        with self.db.tx() as con:
+            con.execute("UPDATE uploads SET received=? WHERE id=?", (received, uid))
 
     def _finish(self, row) -> str | None:
         """Check the complete stand-in and move it into place. Returns a problem text or None."""
@@ -227,9 +233,12 @@ class TusApp:
         return None
 
     async def _discard(self, uid):
+        await anyio.to_thread.run_sync(self._delete_row, uid)
+        (self.dir / uid).unlink(missing_ok=True)
+
+    def _delete_row(self, uid) -> None:
         with self.db.tx() as con:
             con.execute("DELETE FROM uploads WHERE id=?", (uid,))
-        (self.dir / uid).unlink(missing_ok=True)
 
     def expire(self) -> int:
         """Remove uploads past their expiry date; returns how many."""

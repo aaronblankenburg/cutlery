@@ -6,6 +6,7 @@ import datetime
 import importlib.resources
 import sqlite3
 import threading
+import time
 
 
 def now() -> str:
@@ -33,7 +34,16 @@ class Database:
     @contextlib.contextmanager
     def tx(self):
         with self.connect() as con:
-            con.execute("BEGIN IMMEDIATE")
+            # In WAL mode SQLite answers "database is locked" at once, without the busy timeout, when this
+            # connection's last read is older than another connection's write: start again, for up to 30 s.
+            for attempt in range(300):
+                try:
+                    con.execute("BEGIN IMMEDIATE")
+                    break
+                except sqlite3.OperationalError as e:
+                    if "locked" not in str(e) or attempt == 299:
+                        raise
+                    time.sleep(0.1)
             try:
                 yield con
             except BaseException:

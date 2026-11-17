@@ -7,6 +7,13 @@ import { size as fmtSize, duration as fmtDuration } from './format.js';
 const VIDEO_EXT = new Set(['mp4', 'mov', 'm4v', 'mts', 'm2ts', 'mkv', 'avi', 'mxf', 'webm', '3gp', 'mpg', 'mpeg']);
 const SKIP_EXT = new Set(['lrv', 'thm']);   // GoPro low-res previews and thumbnails
 const MAX_WAITING = 3;                       // transcoded files waiting for upload (OPFS space)
+// Clips transcoded at the same time. Measured with tools/bench_transcode.py (docs/m1-feasibility.md): with a GPU a
+// second or third worker gains 5-10 % (they share the hardware decoder, which already uses several cores), without
+// one it is 13 % slower. So one; ?parallel=N in the address tries more on other machines.
+const PARALLEL = () => {
+  const forced = Number(new URLSearchParams(location.search).get('parallel'));
+  return forced >= 1 && forced <= 8 ? Math.floor(forced) : 1;
+};
 const CHUNK = 8 * 1024 * 1024;
 
 const root = document.getElementById('footage');
@@ -16,31 +23,40 @@ const rows = new Map();     // rel_path -> row state
 
 // ------------------------------------------------------------------ worker
 
-const worker = new Worker('/static/js/pipeline-worker.js', { type: 'module' });
+// One worker probes and transcodes; more workers transcode further clips at the same time (PARALLEL).
 let nextId = 1;
-const pending = new Map();
-worker.onmessage = ({ data }) => {
-  const p = pending.get(data.id);
-  if (!p) return;
-  if ('progress' in data) { p.onProgress?.(data.progress); return; }
-  pending.delete(data.id);
-  data.ok ? p.resolve(data.result) : p.reject(Object.assign(new Error(data.error), { code: data.code }));
-};
-// A worker whose code did not load (for example a download cut short) fires "error" and never answers:
-// every waiting call fails instead of hanging, and so does every later one.
-let workerFailed = null;
-worker.onerror = (e) => {
-  e.preventDefault?.();
-  workerFailed = new Error(e.message || 'the transcoding worker did not start');
-  for (const p of pending.values()) p.reject(workerFailed);
-  pending.clear();
-};
-function call(type, payload = {}, onProgress) {
-  if (workerFailed) return Promise.reject(workerFailed);
+function makeWorker() {
+  const w = new Worker('/static/js/pipeline-worker.js', { type: 'module' });
+  w.pending = new Map();
+  w.failed = null;
+  w.onmessage = ({ data }) => {
+    const p = w.pending.get(data.id);
+    if (!p) return;
+    if ('progress' in data) { p.onProgress?.(data.progress); return; }
+    w.pending.delete(data.id);
+    data.ok ? p.resolve(data.result) : p.reject(Object.assign(new Error(data.error), { code: data.code }));
+  };
+  // A worker whose code did not load (for example a download cut short) fires "error" and never answers:
+  // every waiting call fails instead of hanging, and so does every later one.
+  w.onerror = (e) => {
+    e.preventDefault?.();
+    w.failed = new Error(e.message || 'the transcoding worker did not start');
+    for (const p of w.pending.values()) p.reject(w.failed);
+    w.pending.clear();
+  };
+  return w;
+}
+const workers = [makeWorker()];
+function workerFor(k) {
+  while (workers.length <= k) workers.push(makeWorker());
+  return workers[k];
+}
+function call(type, payload = {}, onProgress, w = workers[0]) {
+  if (w.failed) return Promise.reject(w.failed);
   const id = nextId++;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject, onProgress });
-    worker.postMessage({ id, type, ...payload });
+    w.pending.set(id, { resolve, reject, onProgress });
+    w.postMessage({ id, type, ...payload });
   });
 }
 function withTimeout(promise, ms) {
@@ -238,7 +254,7 @@ async function registerClip(item) {
 
 let caps = null;
 
-async function transcodeRow(row) {
+async function transcodeRow(row, w) {
   const fp = row.sidecar.fingerprint;
   const saved = await getState(fp);
   if (saved?.opfs && saved.transcoded) {
@@ -254,7 +270,7 @@ async function transcodeRow(row) {
   const result = await call('transcode', { file: row.item.file, outName }, (p) => {
     row.progress = p;
     render(row);
-  });
+  }, w);
   row.output = { opfs: result.name, size: result.size, transcoded: true };
   row.standinSize = result.size;
   await putState(fp, row.output);
@@ -357,12 +373,13 @@ async function run(fileList) {
     probing = false;
   })();
 
-  const transcoder = (async () => {
+  const parallel = PARALLEL();
+  const transcoder = Promise.all(Array.from({ length: parallel }, (_, k) => (async () => {
     while (token === runToken && (probing || queue.length)) {
-      if (!queue.length || uploads.length >= MAX_WAITING) { await sleep(200); continue; }
+      if (!queue.length || uploads.length >= MAX_WAITING + parallel - 1) { await sleep(200); continue; }
       const row = queue.shift();
       try {
-        await transcodeRow(row);
+        await transcodeRow(row, workerFor(k));
         uploads.push(row);
       } catch (e) {
         row.status = 'failed';
@@ -372,7 +389,7 @@ async function run(fileList) {
       bytesDone += row.size;
       summary();
     }
-  })();
+  })()));
 
   const uploader = (async () => {
     let transcoding = true;

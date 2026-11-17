@@ -186,3 +186,18 @@ def test_a_folder_without_videos_says_so(page, server, tmp_path):
     page.set_input_files("#folder-input", str(folder))
     page.wait_for_selector("#error-notice:not([hidden])", timeout=10000)
     assert "1" in page.inner_text("#error-notice")
+
+
+def test_several_workers_transcode_side_by_side(page, server, clips):
+    """?parallel=2 (for measurements on other machines): two workers, every usable clip still arrives."""
+    pid = new_project(page, server)
+    if not page.evaluate("() => window.cutlery.caps")["avc"]:
+        pytest.skip(f"{page.browser_name} cannot encode H.264 here")
+    page.goto(page.url + "?parallel=2")
+    page.wait_for_function("() => window.cutlery && window.cutlery.caps")
+    page.set_input_files("#folder-input", str(clips))
+    result = wait_done(page)
+    for name in USABLE:
+        assert result[name]["status"] == "uploaded", result[name]
+    media = server["cfg"].work_dir / "projects" / pid / "media"
+    assert len([p for p in media.rglob("*.mp4")]) >= len(USABLE)

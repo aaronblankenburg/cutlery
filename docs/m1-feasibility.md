@@ -41,3 +41,20 @@ about an hour. Upload is not the bottleneck: the stand-ins are ≈ 1.2 Mbit/s vi
 - Portrait phone clips with rotation and real VFR, GoPro clips with a GPS metadata track (`gpmd`), DJI `.SRT`
   files: covered by synthetic test clips, not yet by real footage.
 - Safari: the Playwright WebKit tests need `libavif16` on the test machine; real Safari only on a Mac.
+
+## Parallel transcoding (2026-11-17)
+
+Does transcoding several clips at the same time (one pipeline worker each) make the upload faster? Measured with
+`tools/bench_transcode.py` (the real pipeline worker, N at a time, largest clips first) on a laptop with Intel Iris
+Xe (Alder Lake, 16 logical cores), Chrome 152:
+
+| Footage | Chrome | 1 worker | 2 workers | 3 workers | 4 workers |
+|---|---|---|---|---|---|
+| 8 clips 720p H.264, 17.2 min, 1.35 GB | with GPU | 91.2 s (11.3 × real time) | 87.0 s (1.05 ×) | 89.6 s (1.02 ×) | 88.1 s (1.04 ×) |
+| 5 clips 2160p H.264 (DJI), 1.1 min, 0.91 GB | with GPU | 26.4 s (2.5 ×) | 25.3 s (1.05 ×) | 24.1 s (1.10 ×) | – |
+| 2 clips 720p H.264, 2.4 min | headless, no GPU | 380 s (0.37 ×) | 438 s (0.87 ×) | – | – |
+
+More workers share the same hardware decoder and encoder, and Chrome's decoders already use several cores; without a
+GPU the software paths compete for the same cores. Cutlery therefore transcodes one clip at a time (`PARALLEL` in
+`static/js/footage.js`; `?parallel=N` in the address tries more, for example on a Mac with several media engines).
+Uploading runs alongside the transcoding already, and the stand-ins (≈ 1.4 Mbit/s) never make it the bottleneck.
