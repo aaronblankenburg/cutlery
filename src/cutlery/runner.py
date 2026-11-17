@@ -191,6 +191,44 @@ class Runner:
                         "then.", self.auth_error)
         self.user = self.env.get("CUTLERY_JOB_USER") or f"{os.stat('/data').st_uid}:{os.stat('/data').st_gid}"
         self.container_id = me["Id"]
+        self.vision_done = threading.Event()
+        self.vision_done.set()                   # serve() clears it while it fetches the models
+
+    # ------------------------------------------------------------ models for the image analysis
+
+    def fetch_vision_models(self, folder="/models/cutter-vision") -> list[str]:
+        """Download cutter's detection models (faces, objects, face recognition; 57 MB, checksums verified by
+        cutter) into the models tree, for the user the jobs run as. The analysis container cannot fetch them itself:
+        they are on GitHub, which the egress allowlist does not open (the agent shares it). Returns the files there."""
+        have = []
+        try:
+            from cutter import image_analysis
+        except ImportError:                     # not the Cutlery image (tests)
+            self.vision_done.set()
+            return have
+        os.environ["CUTTER_VISION_MODELS"] = folder
+        try:
+            uid, gid = (int(x) for x in self.user.split(":"))
+        except ValueError:
+            uid = gid = -1
+        try:
+            for name in image_analysis.MODELS:
+                try:
+                    path = image_analysis.model_file(name)
+                except Exception as e:          # network, disk: the analysis runs without them, as before
+                    log.warning("vision model %s: %s", name, e)
+                    continue
+                if path:
+                    have.append(path.name)
+                    for p in (path, path.parent):
+                        try:
+                            os.chown(p, uid, gid)
+                        except OSError:
+                            pass
+            log.info("vision models in %s: %s", folder, ", ".join(have) or "none (faces, people and objects are left out)")
+        finally:
+            self.vision_done.set()
+        return have
 
     # ------------------------------------------------------------ a token entered in the web UI
 
@@ -369,6 +407,7 @@ class Runner:
         if s["kind"] == "claude" and self.auth is None:
             raise NoCredentialError(self.auth_error)
         if s["kind"] == "analysis":
+            self.vision_done.wait(20)            # the download at start (under the caller's 30 s timeout)
             try:
                 self.stop_other_analyses(s["project"], s["job"])
             except RuntimeError as e:
@@ -495,6 +534,8 @@ def serve(cfg) -> None:
         runner.cleanup()
     except (config_mod.ConfigError, RunnerConfigError, RuntimeError) as e:
         raise SystemExit(f"cutlery runner: {e}")
+    runner.vision_done.clear()
+    threading.Thread(target=runner.fetch_vision_models, name="vision-models", daemon=True).start()
     proxy = EgressProxy(("0.0.0.0", PROXY_PORT), runner.allow)
     threading.Thread(target=proxy.serve_forever, name="egress", daemon=True).start()
     path = cfg.runner_socket

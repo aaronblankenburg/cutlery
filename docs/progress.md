@@ -101,6 +101,9 @@ milestone (and before any model switch), so a fresh session can continue without
   stage), so a run interrupted by an update is resumed (and its old container stopped) instead of shown as idle.
 - 0.1.10 (2026-11-17): analysis page counts a transcript's words from the transcript (clips.json has them only after
   a run), shows transcripts open, and says "transcript to come" for clips not transcribed yet.
+- 0.1.11 (2026-11-17): the runner fetches cutter's vision models (YuNet, YOLOX, SFace; 57 MB from GitHub) into
+  /models/cutter-vision at start, owned by the job user. The analysis container could not: GitHub is not on the egress
+  allowlist (which the agent shares), so faces, people and objects were left out of every image analysis.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

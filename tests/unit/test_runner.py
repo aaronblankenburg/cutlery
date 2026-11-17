@@ -219,3 +219,25 @@ def test_an_analysis_stops_older_analyses_of_the_project(runner):
     assert stopped == ["/containers/cutlery-job-aaaa1111/stop?t=10", "/containers/cutlery-job-bbbb2222/stop?t=10"]
     create = next(b for m, u, b in runner.docker.calls if u.startswith("/containers/create"))
     assert create["Labels"]["cutlery.kind"] == "analysis"
+
+
+def test_vision_models_are_fetched_by_the_runner_for_the_job_user(runner, tmp_path, monkeypatch):
+    """The analysis container cannot reach GitHub (egress allowlist); the runner fetches cutter's models for it."""
+    image_analysis = pytest.importorskip("cutter.image_analysis")
+    folder = tmp_path / "cutter-vision"
+    monkeypatch.delenv("CUTTER_TEST", raising=False)
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    fetched = []
+
+    def fake_model_file(name, download=True):
+        import pathlib, os as _os
+        p = pathlib.Path(_os.environ["CUTTER_VISION_MODELS"]) / image_analysis.MODELS[name][0]
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"onnx")
+        fetched.append(name)
+        return p
+    monkeypatch.setattr(image_analysis, "model_file", fake_model_file)
+    monkeypatch.setattr(os, "chown", lambda *a: None)
+    have = runner.fetch_vision_models(str(folder))
+    assert fetched == list(image_analysis.MODELS) and len(have) == 3
+    assert runner.vision_done.is_set()
