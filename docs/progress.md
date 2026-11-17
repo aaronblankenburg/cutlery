@@ -67,16 +67,14 @@ milestone (and before any model switch), so a fresh session can continue without
 
 - Deployment of the user's own instance (2026-11-17): server nextcloud@192.168.0.223, repo in ~/cutlery, `.env` there
   (mode 600) with the trees in /mnt/hdd/cutlery/{data,work,models,secrets}, CUTLERY_BIND=192.168.0.223:8080,
-  image `ghcr.io/aaronblankenburg/cutlery:main` (no release tag yet). Reverse proxy: nginx on pi@192.168.0.222,
+  image `ghcr.io/aaronblankenburg/cutlery:latest` (v0.1.0 tagged 2026-11-17). Reverse proxy: nginx on pi@192.168.0.222,
   /etc/nginx/sites-available/cutlery.aaronbb.com, Let's Encrypt via certbot; Pi-hole local DNS entry
   cutlery.aaronbb.com -> 192.168.0.222 (backup /etc/pihole/pihole.toml.bak-cutlery). Docker's root on .223 is on
   the small system disk (19 GB free after `docker image prune -a`); moving it to /mnt/hdd would be safer.
-  The initial login is in ~/cutlery/.initial-login on the server (mode 600); delete it once noted.
+  The initial login is in ~/cutlery/.initial-login on the server (mode 600); the user wants it kept.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions
-
-- Tag Cutlery v0.1.0 (then `latest` exists and the server can follow releases instead of `main`).
 
 - Round trips in Final Cut Pro, DaVinci Resolve and FilmCraft (docs/nle-roundtrip.md), besides Premiere.
 - Does Resolve keep volume/opacity keyframes and captions from FCPXML? If not, Resolve should get the FCP 7 XML.
