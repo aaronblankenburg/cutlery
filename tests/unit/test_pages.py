@@ -6,7 +6,7 @@ import pytest
 from conftest import auth_header
 from cutlery import cutter_project
 from test_app import TestProjects
-from test_sidecar import GOOD
+from test_sidecar import GOOD, variant
 
 TIMELINE = {"format": 2, "version": "cut1", "title": "Island (cut1)", "fps": 25, "duration": 30.0,
             "sections": [{"name": "Arrival", "start": 0.0, "end": 12.0}, {"name": "Glacier", "start": 12.0, "end": 30.0}],
@@ -143,6 +143,7 @@ class TestPages:
         a = cfg.work_dir / "projects" / pid / "analysis"
         a.mkdir(parents=True)
         (a / "clips.json").write_text(json.dumps([{"id": "C001", "file": "a.mov", "rel_path": "Tag 1/a.mov", "duration": 3}]))
+        client.post(f"/api/projects/{pid}/clips", json=variant(rel_path="Tag 1/a.mov", file="a.mov"))   # shown: known clip
         (a / "transcripts").mkdir()
         (a / "transcripts" / "C001.json").write_text(json.dumps({"segments": [{"text": "Wir waren zu spät."}]}))
         for lang, words in (("de", ["Bereit für den Entwurf?", "Fassungen", "Contact Sheets und Transkripte",
@@ -164,6 +165,7 @@ class TestPages:
         a.mkdir(parents=True)
         (a / "clips.json").write_text(json.dumps([{"id": "C001", "rel_path": "Tag 1/a.mov"},
                                                   {"id": "C002", "rel_path": "../../../etc/passwd"}]))
+        client.post(f"/api/projects/{pid}/clips", json=variant(rel_path="Tag 1/a.mov", file="a.mov"))
         standin = cfg.work_dir / "projects" / pid / "media" / "Tag 1" / "a.mov.mp4"
         standin.parent.mkdir(parents=True)
         standin.write_bytes(b"0123456789")

@@ -26,6 +26,27 @@ document.addEventListener('click', (e) => {
   b.setAttribute('aria-pressed', 'true');
 });
 
+// ------------------------------------------------------------------ delete
+
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('.js-delete');
+  if (!b) return;
+  await load();
+  if (!confirm(t('footage.delete_confirm', { name: b.dataset.name }))) return;
+  const pid = document.getElementById('clip-cards').dataset.project;
+  const res = await fetch(`/api/projects/${pid}/clips/${b.dataset.clip}`, { method: 'DELETE', credentials: 'same-origin' });
+  const err = document.getElementById('analysis-error');
+  if (!res.ok) {
+    err.textContent = (await res.json().catch(() => ({}))).error || res.statusText;
+    err.hidden = false;
+    return;
+  }
+  err.hidden = true;
+  b.closest('.clip-card').remove();
+  const n = document.querySelectorAll('.clip-card:not([hidden])').length;
+  document.getElementById('filter-count').textContent = t('analysis.count', { n });
+});
+
 // ------------------------------------------------------------------ lightbox
 
 const box = document.getElementById('lightbox');
@@ -63,11 +84,10 @@ if (box) {
 const input = document.getElementById('filter');
 if (input) {
   await load();
-  const cards = [...document.querySelectorAll('.clip-card')];
   input.addEventListener('input', () => {
     const q = input.value.trim().toLowerCase();
     let n = 0;
-    for (const c of cards) {
+    for (const c of document.querySelectorAll('.clip-card')) {     // live: deleted cards are gone
       const show = !q || c.dataset.search.includes(q);
       c.hidden = !show;
       n += show;

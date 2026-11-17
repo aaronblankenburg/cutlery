@@ -66,15 +66,19 @@ def routes(c: Context):
         paths = projects.paths(p["id"])
         clips = await anyio.to_thread.run_sync(cutter_project.clips_json, paths)
         a = cutter_project.analysis_dir(paths)
+        # cutter's clips by Cutlery's: same rel_path. A clip deleted since the last analysis run is not shown.
+        ours = {x["rel_path"]: x["id"] for x in await anyio.to_thread.run_sync(projects.clips, p["id"])}
         rows = []
         for cl in clips:
+            if cl.get("rel_path") not in ours:
+                continue
             transcript = ""
             try:
                 tr = json.loads((a / "transcripts" / f"{cl['id']}.json").read_text(encoding="utf-8"))
                 transcript = " ".join(s.get("text", "").strip() for s in tr.get("segments", []) if not s.get("suspect"))
             except (OSError, ValueError):
                 pass
-            rows.append({"id": cl["id"], "file": cl.get("file"), "rel_path": cl.get("rel_path"), "duration": cl.get("duration"),
+            rows.append({"id": cl["id"], "clip_id": ours[cl["rel_path"]], "file": cl.get("file"), "rel_path": cl.get("rel_path"), "duration": cl.get("duration"),
                          "created": cl.get("created"), "sheet": (a / "sheets" / f"{cl['id']}.jpg").is_file(),
                          "transcript": transcript[:3000], "words": cl.get("words"), "device": cl.get("device")})
         quality = ""
