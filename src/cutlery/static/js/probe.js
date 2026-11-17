@@ -27,11 +27,33 @@ function findGps(tags) {
   return null;
 }
 
+// A track's length as ffprobe gives it: last end minus first timestamp.
+async function span(track) {
+  return (await track.computeDuration()) - Math.max(0, (await track.getFirstTimestamp().catch(() => 0)) || 0);
+}
+// The file's length (ffprobe's format duration): from the earliest start to the latest end of its tracks.
+async function spanAll(tracks) {
+  if (!tracks.length) return null;
+  const starts = await Promise.all(tracks.map((t) => t.getFirstTimestamp().catch(() => 0)));
+  const ends = await Promise.all(tracks.map((t) => t.computeDuration()));
+  return Math.max(...ends) - Math.max(0, Math.min(...starts));
+}
+
+// AC-3 / E-AC-3 sound (AVCHD camcorders, .MTS) has no decoder in any browser: libavcodec's as WebAssembly, loaded only
+// when a clip needs it. Registered per worker; the transcoding worker calls this too.
+let ac3Ready = null;
+export function ensureAc3() {
+  ac3Ready ??= import('../vendor/mediabunny-ac3-1.64.0.min.mjs').then(({ registerAc3Decoder }) => registerAc3Decoder());
+  return ac3Ready;
+}
+export const isAc3 = (codec) => codec === 'ac3' || codec === 'eac3';
+
 // Why a clip cannot be used in this browser, or null.
 async function decodeProblem(input, video, audio) {
   if (!video) return { reason: 'no_video' };
   if (!video.codec) return { reason: 'video_codec', detail: String(await video.getInternalCodecId?.() ?? '?') };
   if (!(await video.canDecode())) return { reason: 'video_codec', detail: (await video.getCodecParameterString()) || video.codec };
+  if (audio && isAc3(audio.codec)) await ensureAc3().catch(() => {});
   if (audio && !(await audio.canDecode())) return { reason: 'audio_codec', detail: (await audio.getCodecParameterString()) || audio.codec || '?' };
   return null;
 }
@@ -109,7 +131,9 @@ export async function probe(file, relPath) {
         hdr: await video.hasHighDynamicRange().catch(() => false),
         time_base: vt?.timescale ? `1/${vt.timescale}` : null,
       };
-      sc.duration = shown?.seconds || await video.computeDuration();
+      // without an ISO BMFF box (transport streams, Matroska …) timestamps need not start at 0 (AVCHD: about 1.4 s);
+      // ffprobe's stream duration, and the stand-in's, are end minus start
+      sc.duration = shown?.seconds || await span(video);
     }
     if (audio) {
       sc.audio = { codec: audio.codec || 'unknown', channels: audio.numberOfChannels, sample_rate: audio.sampleRate };
@@ -118,7 +142,7 @@ export async function probe(file, relPath) {
     // the duration of the whole file as ffprobe reports it: the longest of the tracks as they are shown
     const sound = box?.tracks.find((t) => t.handler === 'soun');
     const longest = Math.max(sc.duration || 0, sound ? trackDuration(sound, box.timescale).seconds : 0);
-    sc.format_duration = longest || box?.duration || (await input.computeDuration().catch(() => null));
+    sc.format_duration = box ? (longest || box.duration) : await spanAll([video, audio].filter(Boolean)).catch(() => null);
     const problem = await decodeProblem(input, video, audio);
     if (problem) sc.unsupported = problem;
   } finally {

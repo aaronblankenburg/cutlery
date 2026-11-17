@@ -4,7 +4,7 @@
 // picture turned upright (rotation baked in), long side at most 640 px, H.264 at about 1.2 Mbit/s with a key frame
 // every half second, AAC 48 kHz at about 160 kbit/s with the original channel count.
 import * as MB from '../vendor/mediabunny-1.64.0.min.mjs';
-import { probe } from './probe.js';
+import { probe, ensureAc3, isAc3 } from './probe.js';
 
 export const LONG_SIDE = 640;
 const VIDEO_BITRATE = 1_200_000;
@@ -58,6 +58,7 @@ async function opfsFile(name) {
 
 async function transcode(id, file, outName, report) {
   const input = new MB.Input({ source: new MB.BlobSource(file), formats: MB.ALL_FORMATS });
+  if (isAc3((await input.getPrimaryAudioTrack())?.codec)) await ensureAc3();
   const handle = await opfsFile(outName);
   const access = await handle.createSyncAccessHandle();
   access.truncate(0);

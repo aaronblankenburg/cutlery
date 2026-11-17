@@ -228,3 +228,28 @@ def test_a_stuck_upload_can_be_started_again(page, server, clips, tmp_path):
     result = wait_done(page)
     assert {result[n]["status"] for n in names} == {"uploaded"}, [r["reason"] for r in result.values()]
     assert page.is_hidden("#upload-restart")
+
+
+def test_avchd_with_dolby_digital_sound(page, server, clips, tmp_path):
+    """.MTS from AVCHD camcorders: H.264 in a transport stream with AC-3 sound, which no browser decodes natively;
+    the WebAssembly decoder (@mediabunny/ac3) is loaded for it."""
+    folder = tmp_path / "Camcorder"
+    folder.mkdir()
+    shutil.copy(clips / "AVCHD/00196.MTS", folder / "00196.MTS")
+    pid = new_project(page, server)
+    if not page.evaluate("() => window.cutlery.caps")["avc"]:
+        pytest.skip(f"{page.browser_name} cannot encode H.264 here")
+    page.set_input_files("#folder-input", str(folder))
+    result = wait_done(page)
+    assert result["00196.MTS"]["status"] == "uploaded", result
+    sc = json.loads((server["cfg"].data_dir / "projects" / pid / "sidecars" / "00196.MTS.json").read_text())
+    assert sc["audio"]["codec"] == "ac3" and not sc.get("unsupported")
+    o = ffprobe(clips / "AVCHD/00196.MTS", "-show_streams", "-show_format")       # timestamps start at about 1.4 s
+    ov = next(x for x in o["streams"] if x["codec_type"] == "video")
+    assert abs(sc["duration"] - float(ov["duration"])) < 0.002
+    assert abs(sc["format_duration"] - float(o["format"]["duration"])) < 0.04      # one frame
+    s = ffprobe(server["cfg"].work_dir / "projects" / pid / "media" / "00196.MTS.mp4", "-show_streams", "-show_format")
+    sa = next(x for x in s["streams"] if x["codec_type"] == "audio")
+    sv = next(x for x in s["streams"] if x["codec_type"] == "video")
+    assert sa["codec_name"] == "aac" and sa["channels"] == 2 and (sv["width"], sv["height"]) == (640, 360)
+    assert abs(float(s["format"]["duration"]) - 2) < 0.1

@@ -22,7 +22,7 @@ def ff(*args):
 
 
 def make(name, *, w=1280, h=720, rate="25", d=2, vcodec=("-c:v", "libx264", "-pix_fmt", "yuv420p"),
-         sr=48000, channels=2, extra=(), pre=(), vf=None):
+         sr=48000, channels=2, extra=(), pre=(), vf=None, acodec=("-c:a", "aac", "-b:a", "128k")):
     path = OUT / name
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
@@ -31,7 +31,7 @@ def make(name, *, w=1280, h=720, rate="25", d=2, vcodec=("-c:v", "libx264", "-pi
             "-f", "lavfi", "-i", SRC_A.format(sr=sr, d=d), *pre]
     if vf:
         args += ["-vf", vf]
-    args += [*vcodec, "-c:a", "aac", "-b:a", "128k", "-ac", str(channels), "-shortest", *extra, str(path)]
+    args += [*vcodec, *acodec, "-ac", str(channels), "-shortest", *extra, str(path)]
     ff(*args)
     return path
 
@@ -67,6 +67,9 @@ def main():
         make("Mono 44k/mono 44.1 kHz.mp4", sr=44100, channels=1),
         trimmed("Trimmed/stream copy cut.mp4", make("Trimmed/.long source.mp4", d=8, extra=("-g", "50"))),
         make("Small/already small 512x288.mp4", w=512, h=288),
+        # AVCHD camcorder: MPEG transport stream with 192-byte packets, H.264 and AC-3 (Dolby Digital) sound
+        make("AVCHD/00196.MTS", w=1920, h=1080, acodec=("-c:a", "ac3", "-b:a", "192k"),
+             extra=("-f", "mpegts", "-mpegts_m2ts_mode", "1")),
     ]
     bad = OUT / "Broken" / "not a video.mts"
     bad.parent.mkdir(parents=True, exist_ok=True)

@@ -76,6 +76,9 @@ milestone (and before any model switch), so a fresh session can continue without
   folder again); a watchdog stops a worker that answers neither progress nor result (probe 2 min, transcode 5 min);
   uploadRow can no longer hang on a failed OPFS read or clean-up; a 409 on tus creation (an earlier upload arrived
   after all) is not retried and counts as uploaded.
+- 0.1.2 (2026-11-17): AVCHD (.MTS with AC-3 sound) via @mediabunny/ac3 (WebAssembly, loaded only when needed);
+  durations of transport streams are end minus first timestamp, like ffprobe; the briefing's target length is saved
+  (form.elements['length'] is the field count, not the field).
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

@@ -25,7 +25,8 @@ let dirty = false;
 form.addEventListener('input', () => { dirty = true; });
 
 async function saveBriefing() {
-  const data = Object.fromEntries(fields.map((f) => [f, form.elements[f].value]));
+  // namedItem: form.elements['length'] is the number of fields, not the field called "length"
+  const data = Object.fromEntries(fields.map((f) => [f, form.elements.namedItem(f).value]));
   await api(`/api/projects/${project}/briefing`, { method: 'PUT', headers: { 'content-type': 'application/json' },
     body: JSON.stringify(data) });
   dirty = false;
