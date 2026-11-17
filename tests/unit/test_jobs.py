@@ -84,6 +84,8 @@ class Env:
             a = cutter_project.analysis_dir(paths)
             a.mkdir(parents=True, exist_ok=True)
             (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": GOOD["fingerprint"]}}]))
+            (a / "image").mkdir(exist_ok=True)                    # the last stage of cutter analyze: done
+            (a / "image" / "C001.json").write_text("{}")
         if briefing:
             (paths.data / "briefing.md").write_text("# Briefing\n")
         return pid
@@ -344,6 +346,8 @@ def test_api_briefing_jobs_and_events(client, app, cfg, monkeypatch):
     a = cutter_project.analysis_dir(paths)
     a.mkdir(parents=True)
     (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": GOOD["fingerprint"]}}]))
+    (a / "image").mkdir(exist_ok=True)                    # the last stage of cutter analyze: done
+    (a / "image" / "C001.json").write_text("{}")
     assert client.put(f"/api/projects/{pid}/briefing", json={"prompt": ""}).status_code == 422
     r = client.put(f"/api/projects/{pid}/briefing", headers={"Accept-Language": "de"},
                    json={"prompt": "Zwei Wochen Ringstraße.", "length": "ca. 10 Minuten", "music": "own_and_search"})

@@ -152,6 +152,19 @@ def test_resume_after_a_restart_picks_up_unanalysed_clips(cfg, env, monkeypatch)
     worker2.close()
 
 
+def test_a_run_interrupted_before_the_image_analysis_is_resumed(cfg, env):
+    """An update restarts Cutlery while cutter is transcribing: every clip is in clips.json already, but the run
+    is not done, so it continues after the restart."""
+    projects, worker, db = env
+    pid = projects.create("Half")["id"]
+    make_uploaded_clip(projects, pid, "a.mp4")
+    worker.request(pid)
+    assert wait_for(lambda: state(db, pid)["analysis_state"] == "idle" and not worker.pending(pid))
+    clip = cutter_project.clips_json(projects.paths(pid))[0]
+    (cutter_project.analysis_dir(projects.paths(pid)) / "image" / f"{clip['id']}.json").unlink()
+    assert worker.pending(pid) is True
+
+
 def test_api_reports_the_progress(client, cfg, app):
     from test_app import TestProjects
 

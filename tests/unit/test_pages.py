@@ -191,6 +191,8 @@ class TestPages:
         a = cfg.work_dir / "projects" / pid / "analysis"
         a.mkdir(parents=True)
         (a / "clips.json").write_text(json.dumps([{"id": "C001", "original": {"fingerprint": GOOD["fingerprint"]}}]))
+        (a / "image").mkdir(exist_ok=True)
+        (a / "image" / "C001.json").write_text("{}")                 # the last stage: done
         assert client.get(f"/api/projects/{pid}/state").json()["ready"] is None
 
 

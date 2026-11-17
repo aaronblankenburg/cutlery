@@ -100,8 +100,12 @@ class AnalysisWorker:
         self._state(project_id, "idle")
 
     def pending(self, project_id: str) -> bool:
-        """True if an uploaded clip is not in clips.json yet."""
+        """True if an uploaded clip is not in clips.json yet, or a clip there has no image analysis (the last stage
+        of cutter analyze): a run was interrupted, for example by an update of Cutlery."""
         paths = self.projects.paths(project_id)
+        a = cutter_project.analysis_dir(paths)
+        if any(not (a / "image" / f"{c['id']}.json").is_file() for c in cutter_project.clips_json(paths)):
+            return True
         have = cutter_project.progress(paths)["fingerprints"]
         from .sidecar import fingerprint_key
 

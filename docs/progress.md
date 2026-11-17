@@ -97,6 +97,8 @@ milestone (and before any model switch), so a fresh session can continue without
   or earlier runs; shown on the footage and status pages. No GPU for the analysis on the user's server: faster-whisper
   needs NVIDIA/CUDA, the server has an Intel HD 6000 (i5-5250U, 2 cores). `CUTLERY_ANALYSIS_ARGS=--model small` is
   the lever for speed.
+- 0.1.9 (2026-11-17): an analysis counts as unfinished while a clip in clips.json has no image/<id>.json (the last
+  stage), so a run interrupted by an update is resumed (and its old container stopped) instead of shown as idle.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions
