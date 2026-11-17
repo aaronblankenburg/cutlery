@@ -389,7 +389,15 @@ main.wide { max-width: 1400px; }
 .analysis-filter { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
 .analysis-filter input { max-width: 420px; }
 .clip-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--space-4); }
-.clip-card { margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.clip-card { margin: 0; display: flex; flex-direction: column; gap: var(--space-2); position: relative; }
+/* delete: a round × in the top right corner of the card */
+.card-delete {
+  position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0;
+  border: 1px solid var(--border-strong); background: var(--surface-3); color: var(--text-muted);
+  font-size: 20px; line-height: 1; cursor: pointer; transition: color .15s, background .15s, border-color .15s;
+}
+.card-delete:hover, .card-delete:focus-visible { color: var(--error-fg); border-color: var(--error-fg); background: var(--surface-2); }
 .clip-card header { display: flex; flex-direction: column; gap: 2px; margin: 0; }
 .clip-card h2 { font-size: 16px; }
 .clip-card .sheet { width: 100%; border-radius: var(--radius-sm); display: block; }

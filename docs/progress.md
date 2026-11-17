@@ -86,7 +86,7 @@ milestone (and before any model switch), so a fresh session can continue without
   "Stop upload"; "Stop analysis" (state `stopped`, continue with the retry button).
 - 0.1.4 (2026-11-17): analysis page plays a clip's 360p copy (/projects/{pid}/analysis/clip/{id}.mp4, range
   requests, one at a time); contact sheets and overview pages open in a lightbox (arrows, Escape).
-- 0.1.5 (2026-11-17): delete a clip from the analysis page too; the page shows only clips Cutlery still has (matched by
+- 0.1.5/0.1.6 (2026-11-17): delete a clip from the analysis page too (round × in the card corner); the page shows only clips Cutlery still has (matched by
   rel_path), so a deleted clip is gone before the next analysis run drops it from clips.json.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 

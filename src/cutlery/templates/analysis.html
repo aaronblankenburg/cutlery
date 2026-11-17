@@ -39,8 +39,8 @@
       <span class="small muted"><span class="js-duration" data-seconds="{{ c.duration or 0 }}"></span>{% if c.created %} · {{ c.created[:16] }}{% endif %}{% if c.device %} · {{ c.device }}{% endif %}</span>
       <button class="button small-button js-play" type="button" data-src="/projects/{{ project.id }}/analysis/clip/{{ c.id }}.mp4"
               data-target="media-{{ c.id }}" aria-label="{{ t('analysis.play_clip', id=c.id) }}">▶ {{ t('analysis.play') }}</button>
-      <button class="link-button small js-delete" type="button" data-clip="{{ c.clip_id }}" data-name="{{ c.rel_path }}"
-              aria-label="{{ t('footage.delete_clip', name=c.rel_path) }}">{{ t('footage.delete') }}</button>
+      <button class="card-delete js-delete" type="button" data-clip="{{ c.clip_id }}" data-name="{{ c.rel_path }}"
+              aria-label="{{ t('footage.delete_clip', name=c.rel_path) }}" title="{{ t('footage.delete') }}">×</button>
     </header>
     <div class="clip-media" id="media-{{ c.id }}"></div>
     {% if c.sheet %}<a class="js-lightbox" data-group="sheets" data-caption="{{ c.id }} · {{ c.rel_path }}" href="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" target="_blank" rel="noopener">
