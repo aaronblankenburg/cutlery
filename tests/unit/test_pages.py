@@ -158,6 +158,22 @@ class TestPages:
         assert "Wir waren zu spät." in client.get(f"/projects/{pid}/analysis").text
         assert client.get(f"/projects/{pid}/footage", follow_redirects=False).headers["location"] == f"/projects/{pid}/setup"
 
+    def test_analysis_player_serves_the_360p_copy_with_ranges(self, client, cfg):
+        pid = TestProjects().create(client)
+        a = cfg.work_dir / "projects" / pid / "analysis"
+        a.mkdir(parents=True)
+        (a / "clips.json").write_text(json.dumps([{"id": "C001", "rel_path": "Tag 1/a.mov"},
+                                                  {"id": "C002", "rel_path": "../../../etc/passwd"}]))
+        standin = cfg.work_dir / "projects" / pid / "media" / "Tag 1" / "a.mov.mp4"
+        standin.parent.mkdir(parents=True)
+        standin.write_bytes(b"0123456789")
+        r = client.get(f"/projects/{pid}/analysis/clip/C001.mp4", headers={"Range": "bytes=2-5"})
+        assert r.status_code == 206 and r.content == b"2345" and r.headers["content-type"] == "video/mp4"
+        assert client.get(f"/projects/{pid}/analysis/clip/C002.mp4").status_code == 404     # outside the media folder
+        assert client.get(f"/projects/{pid}/analysis/clip/C009.mp4").status_code == 404
+        page = client.get(f"/projects/{pid}/analysis").text
+        assert f"/projects/{pid}/analysis/clip/C001.mp4" in page and 'id="lightbox"' in page
+
     def test_error_page_is_html_for_browsers(self, client):
         r = client.get("/projects/nope", headers={"Accept": "text/html", "Accept-Language": "de"})
         assert r.status_code == 404 and "Nicht gefunden" in r.text and "<html" in r.text

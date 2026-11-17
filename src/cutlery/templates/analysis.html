@@ -24,7 +24,7 @@
 <details class="card">
   <summary>{{ t('analysis.overview', n=overview_pages|length) }}</summary>
   <div class="overview-pages">
-    {% for f in overview_pages %}<a href="/projects/{{ project.id }}/analysis/overview/{{ f }}" target="_blank" rel="noopener"><img src="/projects/{{ project.id }}/analysis/overview/{{ f }}" alt="{{ t('analysis.overview_page', n=loop.index) }}" loading="lazy"></a>{% endfor %}
+    {% for f in overview_pages %}<a class="js-lightbox" data-group="overview" href="/projects/{{ project.id }}/analysis/overview/{{ f }}" target="_blank" rel="noopener"><img src="/projects/{{ project.id }}/analysis/overview/{{ f }}" alt="{{ t('analysis.overview_page', n=loop.index) }}" loading="lazy"></a>{% endfor %}
   </div>
 </details>
 {% endif %}
@@ -36,8 +36,11 @@
       <h2 class="mono">{{ c.id }}</h2>
       <span class="small">{{ c.rel_path }}</span>
       <span class="small muted"><span class="js-duration" data-seconds="{{ c.duration or 0 }}"></span>{% if c.created %} · {{ c.created[:16] }}{% endif %}{% if c.device %} · {{ c.device }}{% endif %}</span>
+      <button class="button small-button js-play" type="button" data-src="/projects/{{ project.id }}/analysis/clip/{{ c.id }}.mp4"
+              data-target="media-{{ c.id }}" aria-label="{{ t('analysis.play_clip', id=c.id) }}">▶ {{ t('analysis.play') }}</button>
     </header>
-    {% if c.sheet %}<a href="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" target="_blank" rel="noopener">
+    <div class="clip-media" id="media-{{ c.id }}"></div>
+    {% if c.sheet %}<a class="js-lightbox" data-group="sheets" data-caption="{{ c.id }} · {{ c.rel_path }}" href="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" target="_blank" rel="noopener">
       <img class="sheet" src="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" alt="{{ t('analysis.sheet_of', id=c.id) }}" loading="lazy"></a>{% endif %}
     {% if c.transcript %}
     <details><summary>{{ t('analysis.transcript', n=c.words or 0) }}</summary><p class="transcript">{{ c.transcript }}</p></details>
@@ -53,5 +56,11 @@
 </details>
 {% endif %}
 {% endif %}
+<dialog class="lightbox" id="lightbox" aria-label="{{ t('analysis.lightbox') }}">
+  <figure><img id="lightbox-img" alt=""><figcaption id="lightbox-caption" class="small"></figcaption></figure>
+  <button class="lightbox-nav prev" type="button" id="lightbox-prev" aria-label="{{ t('analysis.lightbox.prev') }}">‹</button>
+  <button class="lightbox-nav next" type="button" id="lightbox-next" aria-label="{{ t('analysis.lightbox.next') }}">›</button>
+  <button class="lightbox-close" type="button" id="lightbox-close" aria-label="{{ t('analysis.lightbox.close') }}">×</button>
+</dialog>
 {% endblock %}
 {% block scripts %}<script type="module" src="/static/js/analysis.js"></script>{% endblock %}

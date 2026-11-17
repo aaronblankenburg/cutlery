@@ -96,6 +96,19 @@ def routes(c: Context):
             raise HTTPException(404)
         return FileResponse(f, headers={"cache-control": "private, max-age=300"})
 
+    async def analysis_clip(request):
+        """A clip's 360p copy, for the player on the analysis page (range requests: FileResponse)."""
+        p = c.project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        clips = await anyio.to_thread.run_sync(cutter_project.clips_json, paths)
+        cl = next((x for x in clips if x.get("id") == request.path_params["cid"]), None)
+        if not cl or not cl.get("rel_path"):
+            raise HTTPException(404)
+        f = paths.standin(cl["rel_path"]).resolve()
+        if not f.is_relative_to(paths.media.resolve()) or not f.is_file():
+            raise HTTPException(404)
+        return FileResponse(f, media_type="video/mp4", headers={"cache-control": "private, max-age=300"})
+
     async def thumb(request):
         """A still of the project for the project list: the n-th clip's contact sheet."""
         p = c.project_or_404(request.path_params["pid"])
@@ -231,6 +244,7 @@ def routes(c: Context):
         Route("/projects/{pid}/footage", footage_redirect),
         Route("/projects/{pid}/review", review_page),
         Route("/projects/{pid}/analysis", analysis_page),
+        Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),
         Route("/projects/{pid}/analysis/{kind}/{name}", analysis_file),
         Route("/projects/{pid}/thumb/{n:int}", thumb),
         Route("/projects/{pid}/review/api/{path:path}", review_api, methods=["GET", "POST", "PATCH", "DELETE"]),

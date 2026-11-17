@@ -447,5 +447,11 @@
   "footage.delete_all_confirm": "Alle {n} Clips aus dem Projekt löschen? Die 360p-Kopien und die Analyse verschwinden, die Originale auf deinem Rechner bleiben.",
   "footage.analysis.stop": "Analyse anhalten",
   "footage.analysis.stopped": "Analyse angehalten.",
-  "footage.analysis.continue": "Analyse fortsetzen"
+  "footage.analysis.continue": "Analyse fortsetzen",
+  "analysis.play": "Abspielen",
+  "analysis.play_clip": "{id} abspielen",
+  "analysis.lightbox": "Bild",
+  "analysis.lightbox.prev": "Vorheriges",
+  "analysis.lightbox.next": "Nächstes",
+  "analysis.lightbox.close": "Schließen"
 }

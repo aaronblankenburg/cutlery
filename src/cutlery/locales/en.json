@@ -447,5 +447,11 @@
   "footage.delete_all_confirm": "Delete all {n} clips from the project? The 360p copies and the analysis go; the originals on your computer stay.",
   "footage.analysis.stop": "Stop analysis",
   "footage.analysis.stopped": "Analysis stopped.",
-  "footage.analysis.continue": "Continue analysis"
+  "footage.analysis.continue": "Continue analysis",
+  "analysis.play": "Play",
+  "analysis.play_clip": "Play {id}",
+  "analysis.lightbox": "Picture",
+  "analysis.lightbox.prev": "Previous",
+  "analysis.lightbox.next": "Next",
+  "analysis.lightbox.close": "Close"
 }

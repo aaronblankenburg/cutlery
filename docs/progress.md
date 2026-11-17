@@ -84,6 +84,8 @@ milestone (and before any model switch), so a fresh session can continue without
   time as written, UTC), footage length and space on the server; uploaded clips are recognised by path and size and
   not read again; delete one clip or all (DELETE /api/projects/{pid}/clips[/{cid}], refused while a cut runs);
   "Stop upload"; "Stop analysis" (state `stopped`, continue with the retry button).
+- 0.1.4 (2026-11-17): analysis page plays a clip's 360p copy (/projects/{pid}/analysis/clip/{id}.mp4, range
+  requests, one at a time); contact sheets and overview pages open in a lightbox (arrows, Escape).
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions
