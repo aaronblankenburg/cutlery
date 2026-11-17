@@ -47,18 +47,45 @@ function makeWorker() {
   return w;
 }
 const workers = [makeWorker()];
+let probeWorker = null;      // probing has its own worker: a stuck transcode that is stopped does not take it along
 function workerFor(k) {
   while (workers.length <= k) workers.push(makeWorker());
   return workers[k];
 }
-function call(type, payload = {}, onProgress, w = workers[0]) {
+function getProbeWorker() {
+  if (!probeWorker) probeWorker = makeWorker();
+  return probeWorker;
+}
+// Stop a worker (it hangs, or the upload starts over): every call waiting on it fails, a fresh one takes its place.
+function stopWorker(w, reason) {
+  w.terminate();
+  w.failed = w.failed || new Error(reason);
+  for (const p of w.pending.values()) { clearTimeout(p.timer); p.reject(w.failed); }
+  w.pending.clear();
+  const k = workers.indexOf(w);
+  if (k >= 0) workers[k] = makeWorker();
+  if (w === probeWorker) probeWorker = null;
+}
+// idle: give up (and stop the worker) when it sends neither progress nor an answer for this long.
+function call(type, payload = {}, onProgress, w = workers[0], idle = 0) {
   if (w.failed) return Promise.reject(w.failed);
   const id = nextId++;
   return new Promise((resolve, reject) => {
-    w.pending.set(id, { resolve, reject, onProgress });
+    const p = { resolve, reject, onProgress, timer: null };
+    const arm = () => {
+      if (!idle) return;
+      clearTimeout(p.timer);
+      p.timer = setTimeout(() => stopWorker(w, `no answer for ${Math.round(idle / 1000)} s (${type})`), idle);
+    };
+    p.onProgress = (v) => { arm(); onProgress?.(v); };
+    p.resolve = (v) => { clearTimeout(p.timer); resolve(v); };
+    p.reject = (e) => { clearTimeout(p.timer); reject(e); };
+    w.pending.set(id, p);
+    arm();
     w.postMessage({ id, type, ...payload });
   });
 }
+const IDLE = { probe: 120000, transcode: 300000, remove: 30000 };
 function withTimeout(promise, ms) {
   return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
 }
@@ -78,6 +105,7 @@ async function store(mode, fn) {
     const req = fn(tx.objectStore('clips'));
     tx.oncomplete = () => resolve(req?.result);
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
   });
 }
 const stateKey = (fp) => `${project}:${fp.size}:${fp.head_sha256}:${fp.tail_sha256}`;
@@ -165,7 +193,7 @@ function summary() {
       else hints.add('footage.hint.other');
     }
     notice.textContent = [t('footage.unsupported_head', { n: bad.length }), ...[...hints].map((h) => t(h))].join(' ');
-  }
+  }  updateRestart();
 }
 
 function showError(text) {
@@ -226,7 +254,8 @@ async function registerClip(item) {
   row.item = item;
   if (row.status !== 'uploaded') row.status = 'reading';
   render(row);
-  const { sidecar, gpmd } = await call('probe', { file: item.file, relPath: item.relPath });
+  const { sidecar, gpmd } = await call('probe', { file: item.file, relPath: item.relPath }, null,
+    getProbeWorker(), IDLE.probe);
   if (item.srt) sidecar.telemetry.srt = item.srt.name;
   row.sidecar = sidecar;
   const status = await api(`/api/projects/${project}/clips`, {
@@ -270,7 +299,7 @@ async function transcodeRow(row, w) {
   const result = await call('transcode', { file: row.item.file, outName }, (p) => {
     row.progress = p;
     render(row);
-  }, w);
+  }, w, IDLE.transcode);
   row.output = { opfs: result.name, size: result.size, transcoded: true };
   row.standinSize = result.size;
   await putState(fp, row.output);
@@ -283,13 +312,37 @@ async function opfsFile(name) {
   return (await dir.getFileHandle(name)).getFile();
 }
 
-function uploadRow(row) {
-  return new Promise(async (resolve, reject) => {
-    const fp = row.sidecar.fingerprint;
-    const file = await opfsFile(row.output.opfs);
-    row.status = 'uploading';
-    row.progress = 0;
+// Clean-up after an upload: never worth hanging for.
+async function forget(row) {
+  try { await dropState(row.sidecar.fingerprint); } catch { /* the entry stays; the server knows the clip is done */ }
+  try { await call('remove', { name: row.output.opfs }, null, workers[0], IDLE.remove); } catch { /* left in OPFS */ }
+}
+
+const activeUploads = new Set();
+
+// 409 "does not need an upload": an earlier, stopped upload of this clip reached the server after all.
+async function finishedMeanwhile(row) {
+  try {
+    const c = (await api(`/api/projects/${project}/clips`)).clips.find((x) => x.id === row.clipId);
+    if (c?.state !== 'uploaded') return false;
+    row.status = 'uploaded';
+    row.standinSize = c.standin_size;
+    row.reason = '';
     render(row);
+    await forget(row);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function uploadRow(row) {
+  const fp = row.sidecar.fingerprint;
+  const file = await opfsFile(row.output.opfs);
+  row.status = 'uploading';
+  row.progress = 0;
+  render(row);
+  await new Promise((resolve, reject) => {
     const upload = new window.tus.Upload(file, {
       endpoint: '/tus/',
       uploadUrl: row.output.uploadUrl || null,
@@ -297,33 +350,59 @@ function uploadRow(row) {
       chunkSize: CHUNK,
       retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000, 60000],
       storeFingerprintForResuming: false,
-      onUploadUrlAvailable: async () => {
+      // tus-js-client's rule (retry 5xx, network errors, 409, 423), except a 409 on creation: "this clip does not
+      // need an upload" will not change (an earlier upload arrived after all), so do not retry it for two minutes.
+      onShouldRetry: (err) => {
+        const status = err.originalResponse?.getStatus?.() || 0;
+        if (status === 409 && err.originalRequest?.getMethod?.() === 'POST') return false;
+        return !(status >= 400 && status < 500) || status === 409 || status === 423;
+      },
+      onUploadUrlAvailable: () => {
         row.output.uploadUrl = upload.url;
-        await putState(fp, row.output);
+        putState(fp, row.output).catch(() => {});
       },
       onProgress: (sent, total) => { row.progress = total ? sent / total : 0; render(row); },
       onError: (err) => {
+        activeUploads.delete(upload);
         const status = err.originalResponse?.getStatus?.();
-        if (status === 404 || status === 410) { row.output.uploadUrl = null; putState(fp, row.output); }
+        if (status === 404 || status === 410) { row.output.uploadUrl = null; putState(fp, row.output).catch(() => {}); }
         reject(Object.assign(err, { status, body: err.originalResponse?.getBody?.() }));
       },
-      onSuccess: async () => {
-        row.status = 'uploaded';
-        row.standinSize = file.size;
-        render(row);
-        await dropState(fp);
-        await call('remove', { name: row.output.opfs });
-        resolve();
-      },
+      onSuccess: () => { activeUploads.delete(upload); resolve(); },
     });
+    upload.abortRun = () => { activeUploads.delete(upload); upload.abort(); reject(new Error('stopped')); };
+    activeUploads.add(upload);
     upload.start();
   });
+  row.status = 'uploaded';
+  row.standinSize = file.size;
+  render(row);
+  await forget(row);
 }
 
 let runToken = 0;
+let lastFiles = null;        // the chosen folder, for "start the upload again" (gone after a reload)
+
+// Show "start again" while clips of the chosen folder are not uploaded yet (stuck, failed or still to come).
+function updateRestart() {
+  const open = [...rows.values()].some((r) => r.item && !['uploaded', 'unsupported'].includes(r.status));
+  $('upload-restart').hidden = !(lastFiles && open);
+}
+
+// Stop everything that runs (uploads, workers) and go through the folder again: done clips are skipped by the
+// server, transcoded ones are taken from OPFS, interrupted uploads continue where they stopped.
+function restart() {
+  if (!lastFiles) return;
+  runToken++;
+  for (const u of [...activeUploads]) u.abortRun();
+  for (const w of [...workers]) stopWorker(w, 'stopped');
+  if (probeWorker) stopWorker(probeWorker, 'stopped');
+  run(lastFiles);
+}
 
 async function run(fileList) {
   const token = ++runToken;
+  lastFiles = fileList;
   showError('');
   const items = collect(fileList);
   if (!items.length) {
@@ -363,6 +442,7 @@ async function run(fileList) {
         const row = await registerClip(item);
         if (row.needsUpload) { queue.push(row); bytesTotal += item.file.size; }
       } catch (e) {
+        if (token !== runToken) return;
         const row = rows.get(item.relPath);
         row.status = 'failed';
         row.reason = e.message;
@@ -382,6 +462,7 @@ async function run(fileList) {
         await transcodeRow(row, workerFor(k));
         uploads.push(row);
       } catch (e) {
+        if (token !== runToken) return;
         row.status = 'failed';
         row.reason = e.message;
         render(row);
@@ -400,13 +481,16 @@ async function run(fileList) {
       try {
         await uploadRow(row);
       } catch (e) {
+        if (token !== runToken) return;
+        if (e.status === 409 && await finishedMeanwhile(row)) { uploads.shift(); summary(); continue; }
         row.status = 'failed';
         row.reason = e.status === 422 ? (e.body || e.message) : e.message;
         render(row);
-        if (e.status === 422) { await dropState(row.sidecar.fingerprint); await call('remove', { name: row.output.opfs }); }
+        if (e.status === 422) await forget(row);
       }
       uploads.shift();
       summary();
+      updateRestart();
     }
   })();
 
@@ -414,6 +498,7 @@ async function run(fileList) {
   if (token === runToken) {
     setBusy(false);
     summary();
+    updateRestart();
   }
 }
 
@@ -446,6 +531,7 @@ setInterval(showAnalysis, 5000);
 await load();
 // The folder can be chosen at once; run() waits until the worker is ready.
 $('folder-input').addEventListener('change', (e) => run(e.target.files));
+$('upload-restart').addEventListener('click', restart);
 const ready = withTimeout(call('capabilities'), 30000).then((c) => { caps = c; return c; },
   (err) => {
     console.error('cutlery: transcoding worker', err);
@@ -455,7 +541,7 @@ const ready = withTimeout(call('capabilities'), 30000).then((c) => { caps = c; r
     throw err;
   });
 ready.catch(() => {});
-window.cutlery = { get caps() { return caps; }, rows, run, ready };   // for tests and debugging
+window.cutlery = { get caps() { return caps; }, rows, run, restart, ready, workers };   // for tests and debugging
 await loadServerState();
 try { await ready; } catch { /* shown above */ }
 const problems = [];

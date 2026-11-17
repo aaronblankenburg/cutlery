@@ -72,6 +72,10 @@ milestone (and before any model switch), so a fresh session can continue without
   cutlery.aaronbb.com -> 192.168.0.222 (backup /etc/pihole/pihole.toml.bak-cutlery). Docker's root on .223 is on
   the small system disk (19 GB free after `docker image prune -a`); moving it to /mnt/hdd would be safer.
   The initial login is in ~/cutlery/.initial-login on the server (mode 600); the user wants it kept.
+- 0.1.1 (2026-11-17): "Start upload again" button on the footage page (stops uploads and workers, goes through the
+  folder again); a watchdog stops a worker that answers neither progress nor result (probe 2 min, transcode 5 min);
+  uploadRow can no longer hang on a failed OPFS read or clean-up; a 409 on tus creation (an earlier upload arrived
+  after all) is not retried and counts as uploaded.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

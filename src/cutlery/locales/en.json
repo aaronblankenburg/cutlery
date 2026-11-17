@@ -429,5 +429,7 @@
   "settings.claude.error": "Not saved: {message}",
   "footage.browser.worker_failed": "The transcoding in your browser could not start (a file of the page did not load completely). Reload the page; if it happens again, clear the browser cache for this site.",
   "footage.preparing": "Preparing the transcoding …",
-  "footage.error.no_videos": "None of the {n} files in this folder is a video Cutlery can read (MP4, MOV, MTS, MKV, AVI, MXF, WebM …). Choose the folder with your clips."
+  "footage.error.no_videos": "None of the {n} files in this folder is a video Cutlery can read (MP4, MOV, MTS, MKV, AVI, MXF, WebM …). Choose the folder with your clips.",
+  "footage.restart": "Start upload again",
+  "footage.restart_hint": "Stops what is running and goes through the folder again. Uploaded clips are skipped, interrupted ones continue."
 }

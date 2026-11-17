@@ -201,3 +201,30 @@ def test_several_workers_transcode_side_by_side(page, server, clips):
         assert result[name]["status"] == "uploaded", result[name]
     media = server["cfg"].work_dir / "projects" / pid / "media"
     assert len([p for p in media.rglob("*.mp4")]) >= len(USABLE)
+
+
+def test_a_stuck_upload_can_be_started_again(page, server, clips, tmp_path):
+    """An upload that hangs (no answer, no error) is not the end: "start upload again" goes through the folder once
+    more, skips what is done and finishes the rest."""
+    if page.browser_name != "chrome":
+        pytest.skip("one browser is enough for the restart test")
+    folder = tmp_path / "footage"
+    names = ("Day 1/2024-06-01 10-15-00 h264.mp4", "Day 2/start timecode.mov", "Phone/vfr.mp4")
+    for name in names:
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(clips / name, folder / name)
+    hung = []
+    page.context.route("**/tus/**", lambda route: hung.append(route))    # never answered: requests just sit there
+    new_project(page, server)
+    assert page.is_hidden("#upload-restart")
+    page.set_input_files("#folder-input", str(folder))
+    end = time.time() + 120
+    while time.time() < end and not (hung and any(r["status"] == "uploading" for r in rows(page))):
+        page.wait_for_timeout(200)         # (lets Playwright run the route handler)
+    assert hung, rows(page)
+    page.wait_for_selector("#upload-restart:visible")
+    page.context.unroute("**/tus/**")
+    page.click("#upload-restart")
+    result = wait_done(page)
+    assert {result[n]["status"] for n in names} == {"uploaded"}, [r["reason"] for r in result.values()]
+    assert page.is_hidden("#upload-restart")

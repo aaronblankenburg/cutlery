@@ -18,6 +18,7 @@
         <div class="actions">
           <label class="button" for="folder-input" id="pick-folder">{{ t('footage.pick_other') if st.clips else t('footage.pick') }}</label>
           <input type="file" id="folder-input" webkitdirectory multiple hidden>
+          <button class="button" type="button" id="upload-restart" hidden title="{{ t('footage.restart_hint') }}">{{ t('footage.restart') }}</button>
         </div>
       </header>
       <div class="stack">
