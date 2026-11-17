@@ -104,6 +104,9 @@ milestone (and before any model switch), so a fresh session can continue without
 - 0.1.11 (2026-11-17): the runner fetches cutter's vision models (YuNet, YOLOX, SFace; 57 MB from GitHub) into
   /models/cutter-vision at start, owned by the job user. The analysis container could not: GitHub is not on the egress
   allowlist (which the agent shares), so faces, people and objects were left out of every image analysis.
+- 0.1.12 (2026-11-17): an analysis the user stopped stays stopped across restarts (resume skipped nothing before).
+  On the server, the 150 Namibia image analyses made without the vision models were removed to be measured again.
+  CLIP tags and PANNs audio events (need PyTorch) stay out for now (user's decision).
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

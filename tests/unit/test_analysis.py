@@ -172,3 +172,13 @@ def test_api_reports_the_progress(client, cfg, app):
     r = client.get(f"/api/projects/{pid}/analysis").json()
     assert r["state"] == "idle" and r["clips"] == 0 and r["uploaded"] == 0
     assert client.get("/api/projects/nope/analysis").status_code == 404
+
+
+def test_a_stopped_analysis_stays_stopped_after_a_restart(cfg, env):
+    projects, worker, db = env
+    pid = projects.create("Paused")["id"]
+    make_uploaded_clip(projects, pid, "a.mp4")
+    worker.stop(pid)
+    worker2 = AnalysisWorker(cfg, db, projects, settle=0.1)
+    assert worker2.resume() == 0 and state(db, pid)["analysis_state"] == "stopped"
+    worker2.close()

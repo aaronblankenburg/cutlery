@@ -86,7 +86,9 @@ class AnalysisWorker:
         """After a restart: analyse every project that has uploaded clips cutter has not seen yet."""
         n = 0
         self.db_reset()
-        for p in self.db.all("SELECT id FROM projects"):
+        for p in self.db.all("SELECT id, analysis_state FROM projects"):
+            if p["analysis_state"] == "stopped":       # the user stopped it; it waits for "continue"
+                continue
             if self.pending(p["id"]):
                 self.request(p["id"])
                 n += 1
