@@ -453,5 +453,6 @@
   "analysis.lightbox": "Bild",
   "analysis.lightbox.prev": "Vorheriges",
   "analysis.lightbox.next": "Nächstes",
-  "analysis.lightbox.close": "Schließen"
+  "analysis.lightbox.close": "Schließen",
+  "analysis.fact.clips_of": "{n} von {total} analysiert"
 }

@@ -88,6 +88,10 @@ milestone (and before any model switch), so a fresh session can continue without
   requests, one at a time); contact sheets and overview pages open in a lightbox (arrows, Escape).
 - 0.1.5/0.1.6 (2026-11-17): delete a clip from the analysis page too (round × in the card corner); the page shows only clips Cutlery still has (matched by
   rel_path), so a deleted clip is gone before the next analysis run drops it from clips.json.
+- 0.1.7 (2026-11-17): one analysis per project: the runner stops a project's analysis containers left from before
+  (label cutlery.kind, or the command for older ones) when it starts a new one. Each web restart (update) used to
+  start another `cutter analyze` beside the old ones (four ran at once on the server). Status page facts are read
+  live (image/ and transcripts/ files, sidecars for places) and show "n of m analysed" while the analysis runs.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

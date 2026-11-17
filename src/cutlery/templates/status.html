@@ -47,7 +47,7 @@
     <section class="card">
       <h2>{{ t('analysis.title') }}</h2>
       <dl class="facts">
-        <div><dt>{{ t('analysis.fact.clips') }}</dt><dd>{{ t('analysis.fact.clips_value', n=facts.clips) }}</dd></div>
+        <div><dt>{{ t('analysis.fact.clips') }}</dt><dd>{% if facts.clips < facts.uploaded %}{{ t('analysis.fact.clips_of', n=facts.clips, total=facts.uploaded) }}{% else %}{{ t('analysis.fact.clips_value', n=facts.clips) }}{% endif %}</dd></div>
         <div><dt>{{ t('analysis.fact.speech') }}</dt><dd><span class="js-duration" data-seconds="{{ facts.speech_s }}"></span></dd></div>
         <div><dt>{{ t('analysis.fact.usable') }}</dt><dd><span class="js-duration" data-seconds="{{ facts.usable_s }}"></span></dd></div>
         <div><dt>{{ t('analysis.fact.places') }}</dt><dd>{{ t('analysis.fact.places_value', n=facts.gps) }}</dd></div>

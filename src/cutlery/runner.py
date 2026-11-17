@@ -338,7 +338,7 @@ class Runner:
             "Image": self.image, "User": self.user, "WorkingDir": s["data"],
             "Entrypoint": ["cutlery-job"], "Cmd": s["argv"],
             "Env": [f"{k}={v}" for k, v in env.items()],
-            "Labels": {"cutlery.job": s["job"], "cutlery.project": s["project"]},
+            "Labels": {"cutlery.job": s["job"], "cutlery.project": s["project"], "cutlery.kind": s.get("kind", "claude")},
             "Healthcheck": {"Test": ["NONE"]},
             "HostConfig": {
                 "Binds": binds,
@@ -348,10 +348,31 @@ class Runner:
             },
         }
 
+    def stop_other_analyses(self, project: str, keep: str) -> int:
+        """One analysis per project: stop analysis containers of the project still running from before (the web app
+        restarted, for example on an update, and started a new run; the old one would do the same work again)."""
+        flt = urllib.parse.quote(json.dumps({"label": [f"cutlery.project={project}"], "status": ["running"]}))
+        n = 0
+        for c in self.docker.call("GET", f"/containers/json?filters={flt}"):
+            labels = c.get("Labels") or {}
+            kind = labels.get("cutlery.kind") or ("analysis" if " cutter analyze" in f" {c.get('Command', '')}" else "claude")
+            job = labels.get("cutlery.job")
+            if kind != "analysis" or not job or job == keep:
+                continue
+            log.info("project %s: stopping analysis job %s left from before", project, job)
+            self.stop(job)
+            n += 1
+        return n
+
     def start(self, spec: dict) -> None:
         s = self.check_spec(spec)
         if s["kind"] == "claude" and self.auth is None:
             raise NoCredentialError(self.auth_error)
+        if s["kind"] == "analysis":
+            try:
+                self.stop_other_analyses(s["project"], s["job"])
+            except RuntimeError as e:
+                log.warning("cannot check for older analysis jobs: %s", e)
         with self.lock:
             self.exits.pop(s["job"], None)          # a resumed job has the same id: forget the last attempt's exit
         name = f"cutlery-job-{s['job']}"

@@ -44,7 +44,7 @@ def routes(c: Context):
         p = c.project_or_404(request.path_params["pid"])
         st = await state_of(p)
         paths = projects.paths(p["id"])
-        facts = await anyio.to_thread.run_sync(overview.analysis_facts, paths)
+        facts = await anyio.to_thread.run_sync(overview.analysis_facts, projects, p["id"])
         people = await anyio.to_thread.run_sync(overview.people, paths)
         return c.page(request, "status.html", project=p, st=st, facts=facts, people=people)
 

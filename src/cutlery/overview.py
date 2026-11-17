@@ -19,20 +19,40 @@ def ready(projects, worker, project_id) -> str | None:
     return None
 
 
-def analysis_facts(paths) -> dict:
-    """Numbers for the status page: clips analysed, speech, usable time, clips with a place."""
-    clips = cutter_project.clips_json(paths)
+def analysis_facts(projects, project_id: str) -> dict:
+    """Numbers for the status page: clips analysed (of the uploaded ones), speech, usable time, clips with a place.
+
+    Read from what is there now, also during a run: cutter lists a clip in clips.json as soon as it has read its
+    metadata and writes speech_seconds only at the end of a run, so the per-clip files count (image/<id>.json:
+    analysed; transcripts/<id>.json: speech, like cutter without suspect segments). Places come from the sidecars."""
+    paths = projects.paths(project_id)
+    ours = [c for c in projects.clips(project_id) if c["state"] == "uploaded"]
+    known = {c["rel_path"] for c in ours}
+    clips = [c for c in cutter_project.clips_json(paths) if c.get("rel_path") in known]
     a = cutter_project.analysis_dir(paths)
     usable = speech = 0.0
+    analysed = 0
     for c in clips:
-        speech += c.get("speech_seconds") or 0
         try:
             img = json.loads((a / "image" / f"{c['id']}.json").read_text(encoding="utf-8"))
+            analysed += 1
             usable += (img.get("summary") or {}).get("usable_s") or 0
         except (OSError, ValueError):
             pass
-    return {"clips": len(clips), "speech_s": speech, "usable_s": usable,
-            "gps": sum(1 for c in clips if c.get("gps") or c.get("telemetry_files")),
+        try:
+            tr = json.loads((a / "transcripts" / f"{c['id']}.json").read_text(encoding="utf-8"))
+            speech += sum(s["end"] - s["start"] for s in tr.get("segments", []) if not s.get("suspect"))
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
+    gps = 0
+    for c in ours:
+        try:
+            sc = projects.sidecar(project_id, c)
+        except (OSError, ValueError):
+            continue
+        tel = sc.get("telemetry") or {}
+        gps += bool(sc.get("gps") or tel.get("gpmd") or tel.get("srt"))
+    return {"clips": analysed, "uploaded": len(ours), "speech_s": round(speech, 1), "usable_s": usable, "gps": gps,
             "duration_s": sum(c.get("duration") or 0 for c in clips)}
 
 

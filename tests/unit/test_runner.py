@@ -198,3 +198,24 @@ def test_a_credential_in_env_wins_and_cannot_be_changed_from_the_web_ui(runner):
     assert runner.status()["source"] == "env" and not runner.status()["can_store"]
     with pytest.raises(ValueError, match=".env"):
         runner.set_token(TOKEN)
+
+
+def test_an_analysis_stops_older_analyses_of_the_project(runner):
+    """After an update the web app starts the analysis again; the run from before must not go on beside it."""
+    def containers(method, url, body=None, timeout=60):
+        runner.docker.calls.append((method, url, body))
+        if url.startswith("/containers/json"):
+            return [
+                {"Id": "a", "Labels": {"cutlery.job": "aaaa1111", "cutlery.project": PROJECT}, "Command": "cutlery-job cutter analyze"},
+                {"Id": "b", "Labels": {"cutlery.job": "bbbb2222", "cutlery.project": PROJECT, "cutlery.kind": "analysis"}},
+                {"Id": "c", "Labels": {"cutlery.job": "cccc3333", "cutlery.project": PROJECT, "cutlery.kind": "claude"}},
+                {"Id": "d", "Labels": {"cutlery.job": JOB, "cutlery.project": PROJECT, "cutlery.kind": "analysis"}},
+            ]
+        return {"Id": "c0ffee"} if url.startswith("/containers/create") else {}
+    runner.docker.call = containers
+    runner.start(spec(kind="analysis", argv=["cutter", "analyze"],
+                      env={"CUTTER_PROJECT": DATA, "TMPDIR": f"{WORK}/tmp"}))
+    stopped = [u for m, u, _ in runner.docker.calls if m == "POST" and u.endswith("/stop?t=10")]
+    assert stopped == ["/containers/cutlery-job-aaaa1111/stop?t=10", "/containers/cutlery-job-bbbb2222/stop?t=10"]
+    create = next(b for m, u, b in runner.docker.calls if u.startswith("/containers/create"))
+    assert create["Labels"]["cutlery.kind"] == "analysis"
