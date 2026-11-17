@@ -73,15 +73,20 @@ def routes(c: Context):
         for cl in clips:
             if cl.get("rel_path") not in ours:
                 continue
-            transcript = ""
+            # words from the transcript itself: cutter writes them into clips.json only at the end of a run
+            transcript, words, transcribed = "", 0, False
             try:
                 tr = json.loads((a / "transcripts" / f"{cl['id']}.json").read_text(encoding="utf-8"))
-                transcript = " ".join(s.get("text", "").strip() for s in tr.get("segments", []) if not s.get("suspect"))
+                segs = [s for s in tr.get("segments", []) if not s.get("suspect")]
+                transcript = " ".join(s.get("text", "").strip() for s in segs)
+                words = sum(len(s.get("words") or []) or len(s.get("text", "").split()) for s in segs)
+                transcribed = True
             except (OSError, ValueError):
                 pass
             rows.append({"id": cl["id"], "clip_id": ours[cl["rel_path"]], "file": cl.get("file"), "rel_path": cl.get("rel_path"), "duration": cl.get("duration"),
                          "created": cl.get("created"), "sheet": (a / "sheets" / f"{cl['id']}.jpg").is_file(),
-                         "transcript": transcript[:3000], "words": cl.get("words"), "device": cl.get("device")})
+                         "transcript": transcript[:3000], "words": words, "device": cl.get("device"),
+                         "transcribed": transcribed or not cl.get("has_audio", True)})
         quality = ""
         try:
             quality = (a / "quality.txt").read_text(encoding="utf-8")

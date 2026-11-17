@@ -46,8 +46,9 @@
     {% if c.sheet %}<a class="js-lightbox" data-group="sheets" data-caption="{{ c.id }} · {{ c.rel_path }}" href="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" target="_blank" rel="noopener">
       <img class="sheet" src="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" alt="{{ t('analysis.sheet_of', id=c.id) }}" loading="lazy"></a>{% endif %}
     {% if c.transcript %}
-    <details><summary>{{ t('analysis.transcript', n=c.words or 0) }}</summary><p class="transcript">{{ c.transcript }}</p></details>
-    {% else %}<p class="small muted">{{ t('analysis.no_speech') }}</p>{% endif %}
+    <details open><summary>{{ t('analysis.transcript', n=c.words) }}</summary><p class="transcript">{{ c.transcript }}</p></details>
+    {% elif c.transcribed %}<p class="small muted">{{ t('analysis.no_speech') }}</p>
+    {% else %}<p class="small muted">{{ t('analysis.transcript_pending') }}</p>{% endif %}
   </article>
   {% endfor %}
 </div>

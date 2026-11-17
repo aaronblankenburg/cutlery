@@ -457,5 +457,6 @@
   "analysis.fact.clips_of": "{n} of {total} analysed",
   "footage.analysis.remaining": "About {time} left.",
   "footage.analysis.remaining_unknown": "Estimating the time left …",
-  "steps.analysis_left": "about"
+  "steps.analysis_left": "about",
+  "analysis.transcript_pending": "Transcript to come (the analysis is still running)."
 }

@@ -157,6 +157,8 @@ class TestPages:
             for w in words[:3] + words[4:]:
                 assert w in text, (lang, w)
         assert "Wir waren zu spät." in client.get(f"/projects/{pid}/analysis").text
+        page = client.get(f"/projects/{pid}/analysis", headers={"Accept-Language": "de"}).text
+        assert "Transkript (4 Wörter)" in page            # counted from the transcript, not clips.json
         assert client.get(f"/projects/{pid}/footage", follow_redirects=False).headers["location"] == f"/projects/{pid}/setup"
 
     def test_analysis_player_serves_the_360p_copy_with_ranges(self, client, cfg):
