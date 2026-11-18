@@ -330,9 +330,25 @@ main.wide { max-width: 1400px; }
 .facts dt { font-size: var(--text-xs); color: var(--text-muted); }
 .facts dd { margin: 0; font-weight: 600; }
 .people { display: flex; flex-direction: column; gap: var(--space-2); }
-.person { display: grid; grid-template-columns: 40px 40px 1fr auto; gap: var(--space-2); align-items: center; }
-.person img, .face-empty { width: 40px; height: 40px; border-radius: 20px; object-fit: cover; background: var(--surface-3); }
-.person input { min-height: 36px; padding: 6px 10px; }
+.person { display: grid; grid-template-columns: 20px 40px 40px 1fr auto; gap: var(--space-2); align-items: center;
+  padding: 4px; border-radius: var(--radius-md); }
+.person.picked { background: var(--surface-2); outline: 1px solid var(--accent); }
+.person .person-pick { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.person .face { display: block; cursor: pointer; }
+.person img, .face-empty { display: block; width: 40px; height: 40px; border-radius: 20px; object-fit: cover; background: var(--surface-3); }
+.person.picked img, .person.picked .face-empty { box-shadow: 0 0 0 2px var(--accent); }
+.person input[type=text] { min-height: 36px; padding: 6px 10px; min-width: 0; }
+.merge-bar { position: sticky; bottom: var(--space-3); display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--space-2) var(--space-3); margin-top: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--accent); border-radius: var(--radius-lg); background: var(--surface); }
+.merge-bar[hidden] { display: none; }
+.merge-bar #merge-count { margin-right: auto; font-weight: 600; }
+.merge-faces { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.merge-face { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.merge-face .pics { display: flex; gap: 2px; }
+.merge-face img { width: 56px; height: 56px; border-radius: var(--radius-md); object-fit: cover; background: var(--surface-3); }
+.merge-face .who { font-size: var(--text-xs); color: var(--text-muted); }
+.dialog input[type=text] { width: 100%; }
 .cut-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .cut-list li { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
 

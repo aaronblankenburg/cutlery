@@ -144,13 +144,106 @@ $('job-cancel').addEventListener('click', async () => {
 });
 
 // ------------------------------------------------------------------ people
+// Names are saved when a field is left. Merging: tick two or more people (box or face), a bar offers "Merge", a
+// dialog shows their faces side by side and asks for the name. Typing a name another person already has offers the
+// same dialog for the two.
+
+const picks = () => [...document.querySelectorAll('[data-pick]:checked')].map((b) => b.dataset.pick);
+
+function showPicks() {
+  const ids = picks();
+  for (const row of document.querySelectorAll('[data-row]')) row.classList.toggle('picked', ids.includes(row.dataset.row));
+  const bar = $('merge-bar');
+  if (!bar) return;
+  bar.hidden = ids.length < 2;
+  $('merge-count').textContent = t('people.selected', { n: ids.length });
+}
+for (const box of document.querySelectorAll('[data-pick]')) box.addEventListener('change', showPicks);
+$('merge-clear')?.addEventListener('click', () => {
+  for (const box of document.querySelectorAll('[data-pick]')) box.checked = false;
+  showPicks();
+});
+
+let merging = null;   // {ids, undo}
+async function openMerge(ids, name, undo = null) {
+  const people = await api(`/api/projects/${project}/people`);
+  const byId = Object.fromEntries(people.map((x) => [x.id, x]));
+  // the person that stays: the one called `name`, else the one seen longest
+  const keep = ids.find((id) => name && (byId[id]?.name || '').toLowerCase() === name.toLowerCase())
+    || [...ids].sort((a, b) => (byId[b]?.seconds || 0) - (byId[a]?.seconds || 0))[0];
+  const order = [keep, ...ids.filter((id) => id !== keep)];
+  merging = { ids: order, undo };
+  $('merge-lead').textContent = t('people.merge_lead', { ids: order.join(', '), keep });
+  $('merge-faces').replaceChildren(...order.map((id) => {
+    const box = document.createElement('div');
+    box.className = 'merge-face';
+    const pics = document.createElement('div');
+    pics.className = 'pics';
+    for (const pic of (byId[id]?.pictures || []).slice(0, 3)) {
+      const img = document.createElement('img');
+      img.src = `/projects/${project}/analysis/faces/${encodeURIComponent(pic)}`;
+      img.alt = '';
+      pics.append(img);
+    }
+    if (!pics.children.length) pics.append(Object.assign(document.createElement('span'), { className: 'face-empty' }));
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = [id, byId[id]?.name, `${byId[id]?.seconds || 0} s`].filter(Boolean).join(' · ');
+    box.append(pics, who);
+    return box;
+  }));
+  const names = [...new Set(order.map((id) => byId[id]?.name).filter(Boolean))];
+  $('merge-names').replaceChildren(...names.map((n) => Object.assign(document.createElement('option'), { value: n })));
+  $('merge-name').value = name || byId[keep]?.name || names[0] || '';
+  $('merge-ok').textContent = t('people.merge_ok');
+  $('merge-dialog').showModal();
+}
+
+$('merge-open')?.addEventListener('click', () => openMerge(picks()).catch((err) => {
+  $('people-status').textContent = err.message;
+}));
+
+$('merge-dialog')?.addEventListener('close', async () => {
+  const m = merging;
+  merging = null;
+  if (!m) return;
+  if ($('merge-dialog').returnValue !== 'ok') { m.undo?.(); return; }
+  try {
+    await api(`/api/projects/${project}/people/merge`, { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: m.ids, name: $('merge-name').value }) });
+    try { sessionStorage.setItem('cutlery-people-status', t('people.merged', { id: m.ids[0] })); } catch { /* ok */ }
+    location.reload();
+  } catch (err) {
+    m.undo?.();
+    $('people-status').textContent = err.message;
+  }
+});
+
+try {
+  const said = sessionStorage.getItem('cutlery-people-status');
+  if (said && $('people-status')) { $('people-status').textContent = said; sessionStorage.removeItem('cutlery-people-status'); }
+} catch { /* ok */ }
 
 for (const input of document.querySelectorAll('[data-person]')) {
+  let saved = input.value;
   input.addEventListener('change', async () => {
+    const id = input.dataset.person, name = input.value.trim();
+    // the name of another person: probably the same one
+    const other = name && [...document.querySelectorAll('[data-person]')]
+      .find((x) => x !== input && x.value.trim().toLowerCase() === name.toLowerCase());
+    if (other) {
+      $('people-status').textContent = t('people.merge_same_name', { other: other.dataset.person, name });
+      openMerge([id, other.dataset.person], name, () => { input.value = saved; }).catch((err) => {
+        input.value = saved;
+        $('people-status').textContent = err.message;
+      });
+      return;
+    }
     try {
-      await api(`/api/projects/${project}/people/${input.dataset.person}`, { method: 'PUT',
+      await api(`/api/projects/${project}/people/${id}`, { method: 'PUT',
         headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: input.value }) });
-      $('people-status').textContent = t('people.saved', { id: input.dataset.person });
+      saved = input.value;
+      $('people-status').textContent = t('people.saved', { id });
     } catch (err) {
       $('people-status').textContent = err.message;
     }

@@ -195,21 +195,52 @@ def routes(c: Context):
         p = c.project_or_404(request.path_params["pid"])
         return JSONResponse(await anyio.to_thread.run_sync(overview.people, projects.paths(p["id"])))
 
+    def people_cmd(paths, name, cmd, *args):
+        """cutter people <cmd> <args> in the project (people.json is cutter's; Cutlery only shows it).
+        "--" before the arguments: a name may start with a dash."""
+        cutter_project.write(paths, name)
+        env = {**os.environ, "CUTTER_PROJECT": str(paths.data)}
+        return subprocess.run([cfg.cutter_bin, "people", cmd, "--json", "--", *args], cwd=paths.data, env=env,
+                              capture_output=True, text=True, timeout=120)
+
+    def person_id(value) -> str:
+        if not isinstance(value, str) or not re.fullmatch(r"P\d{1,4}", value):
+            raise HTTPException(404)
+        return value
+
+    def clean_name(value) -> str:
+        return " ".join(str(value or "").split())[:60]
+
     async def api_person(request):
         p = c.project_or_404(request.path_params["pid"])
-        pid_, person = p["id"], request.path_params["person"]
-        if not re.fullmatch(r"P\d{1,4}", person):
-            raise HTTPException(404)
-        name = " ".join(str((await c.read_json(request)).get("name") or "").split())[:60]
-        paths = projects.paths(pid_)
-        env = {**os.environ, "CUTTER_PROJECT": str(paths.data)}
+        person = person_id(request.path_params["person"])
+        name = clean_name((await c.read_json(request)).get("name"))
+        paths = projects.paths(p["id"])
+        r = await anyio.to_thread.run_sync(people_cmd, paths, p["name"], "name", person, name)
+        if r.returncode != 0:
+            return JSONResponse({"error": (r.stderr or r.stdout).strip()[-300:]}, status_code=422)
+        return JSONResponse(await anyio.to_thread.run_sync(overview.people, paths))
 
-        def rename():
-            cutter_project.write(paths, p["name"])
-            return subprocess.run([cfg.cutter_bin, "people", "name", person, name, "--json"], cwd=paths.data, env=env,
-                                  capture_output=True, text=True, timeout=60)
+    async def api_people_merge(request):
+        """Two or more IDs are one person: the first keeps its ID and gets `name` (if given)."""
+        p = c.project_or_404(request.path_params["pid"])
+        data = await c.read_json(request)
+        ids = data.get("ids")
+        if not isinstance(ids, list) or not 2 <= len(ids) <= 50:
+            return JSONResponse({"error": "choose two or more people"}, status_code=422)
+        ids = [person_id(i) for i in ids]
+        if len(set(ids)) != len(ids):
+            return JSONResponse({"error": "choose two or more different people"}, status_code=422)
+        name = clean_name(data.get("name")) if "name" in data else None
+        paths = projects.paths(p["id"])
 
-        r = await anyio.to_thread.run_sync(rename)
+        def merge():
+            r = people_cmd(paths, p["name"], "merge", *ids)
+            if r.returncode == 0 and name is not None:
+                r = people_cmd(paths, p["name"], "name", ids[0], name)
+            return r
+
+        r = await anyio.to_thread.run_sync(merge)
         if r.returncode != 0:
             return JSONResponse({"error": (r.stderr or r.stdout).strip()[-300:]}, status_code=422)
         return JSONResponse(await anyio.to_thread.run_sync(overview.people, paths))
@@ -297,6 +328,7 @@ def routes(c: Context):
         Route("/api/projects/{pid}/files/{kind}/{name}", api_file, methods=["PUT", "DELETE"]),
         Route("/api/projects/{pid}/music/{name}/license", api_license, methods=["PUT"]),
         Route("/api/projects/{pid}/people", api_people),
+        Route("/api/projects/{pid}/people/merge", api_people_merge, methods=["POST"]),
         Route("/api/projects/{pid}/people/{person}", api_person, methods=["PUT"]),
         Route("/api/projects/{pid}/review/done", review_done, methods=["POST"]),
     ]

@@ -33,6 +33,9 @@ if sys.argv[1:2] == ["export"]:
         {"cue": "M1", "title": "Song", "artist": "Band", "license": "CC BY 4.0", "source": "https://example.org/song",
          "file": "music/song.mp3"}]}))
     sys.exit(0)
+if sys.argv[1:2] == ["people"]:
+    # options first, then "--" and the arguments (as Cutlery calls it)
+    sys.argv = sys.argv[:3] + [a for a in sys.argv[3:] if a not in ("--json", "--")]
 if sys.argv[1:3] == ["people", "name"]:
     # cutter people name P1 "Anna": rename a person in people.json
     project = pathlib.Path(os.environ["CUTTER_PROJECT"])
@@ -47,8 +50,29 @@ if sys.argv[1:3] == ["people", "name"]:
     f.write_text(json.dumps(data))
     print(json.dumps({"id": hit["id"], "name": hit["name"]}))
     sys.exit(0)
+if sys.argv[1:3] == ["people", "merge"]:
+    # cutter people merge P1 P2 …: the first ID stays and takes the faces and clips of the others
+    project = pathlib.Path(os.environ["CUTTER_PROJECT"])
+    conf = tomllib.loads((project / "cutter.toml").read_text(encoding="utf-8"))
+    f = pathlib.Path(conf["paths"]["clips"]).parent / "people.json"
+    data = json.loads(f.read_text())
+    ids = [a for a in sys.argv[3:] if not a.startswith("--")]
+    found = [next((p for p in data["people"] if p["id"] == i), None) for i in ids]
+    if None in found:
+        print("Error: no such person", file=sys.stderr)
+        sys.exit(3)
+    first = found[0]
+    for p in found[1:]:
+        first["name"] = first["name"] or p["name"]
+        first["seconds"] = first.get("seconds", 0) + p.get("seconds", 0)
+        first["clips"] = {**p.get("clips", {}), **first.get("clips", {})}
+        first["pictures"] = first.get("pictures", []) + p.get("pictures", [])
+        data["people"].remove(p)
+    f.write_text(json.dumps(data))
+    print(json.dumps({"id": first["id"], "name": first["name"]}))
+    sys.exit(0)
 if sys.argv[1:2] != ["analyze"]:
-    sys.exit("fake cutter: only analyze, export and people name")
+    sys.exit("fake cutter: only analyze, export and people name/merge")
 if os.environ.get("FAKE_CUTTER_LOG"):
     with open(os.environ["FAKE_CUTTER_LOG"], "a") as f:
         f.write(f"{os.getcwd()} {os.environ.get('CUTTER_PROJECT')}\n")

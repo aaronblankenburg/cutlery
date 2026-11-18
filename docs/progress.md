@@ -127,6 +127,13 @@ milestone (and before any model switch), so a fresh session can continue without
   general comments (t null), alternatives (cuts/<cut>/alternatives.json, previews alt-<id>-<n>.mp4, entry field
   `alternative`) and the embedding keys.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
+- 0.2.1 (2026-11-18, cutter 0.5.1 on branch `review-embed-fit`, b8a1065): people can be merged on the status page
+  (tick two or more → "Merge" → dialog with their faces and the name to keep; typing a name another person has
+  offers the same; POST /api/projects/<id>/people/merge → `cutter people merge`, then `people name`; arguments
+  after "--"). Review page has one scrollbar: cutter 0.5.1 fits its embedded page to a wide frame and posts its
+  height on a narrow one (review.js sizes the frame). cutter 0.5.1 also finds an alternatives place by its "clip"
+  when shot numbers moved (cut2 of the user's Namibia project had both places on a stale shot 128), shows places
+  at the same time together, and has a "⇄ Alternatives: n" jump button.
 
 ## Open questions
 

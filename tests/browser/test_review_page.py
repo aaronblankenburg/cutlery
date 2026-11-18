@@ -37,6 +37,10 @@ def test_comment_and_finish_the_review(page, server, clips, monkeypatch):
     page.wait_for_function("() => window.cutleryReview && window.cutleryReview.shown === 'cut1'")   # the frame said so
     box = page.locator("#review-frame").bounding_box()
     assert box["width"] > 1000                                           # full width
+    # one scrollbar: cutter's page fits the frame (only its list of comments scrolls)
+    page.wait_for_function("() => { const f = document.getElementById('review-frame'); const d = f.contentDocument; "
+                           "return d && d.body.classList.contains('embedded') "
+                           "&& d.documentElement.scrollHeight <= f.clientHeight + 1; }")
     frame = page.frame_locator("#review-frame")
     frame.locator("#note").wait_for()
     assert frame.locator("#name-button").is_hidden() or frame.locator("#name-button").is_disabled()   # the login is the name

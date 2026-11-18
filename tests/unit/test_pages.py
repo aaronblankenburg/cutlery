@@ -161,6 +161,25 @@ class TestPeople:
         assert r.status_code == 200 and r.json()[0]["name"] == "Anna"
         assert client.put(f"/api/projects/{pid}/people/X1", json={"name": "x"}).status_code == 404
 
+    def test_merge(self, client, cfg):
+        pid = TestProjects().create(client)
+        a = cfg.work_dir / "projects" / pid / "analysis"
+        a.mkdir(parents=True)
+        (a / "people.json").write_text(json.dumps({"people": [
+            {"id": "P1", "name": "", "seconds": 10, "clips": {"C001": []}, "pictures": ["faces/C001_0.jpg"]},
+            {"id": "P2", "name": "Anna", "seconds": 30, "clips": {"C002": []}, "pictures": ["faces/C002_0.jpg"]},
+            {"id": "P3", "name": "", "seconds": 5, "clips": {"C003": []}, "pictures": []}]}))
+        url = f"/api/projects/{pid}/people/merge"
+        r = client.post(url, json={"ids": ["P2", "P1"], "name": "-Anna B."})
+        assert r.status_code == 200, r.text
+        assert r.json() == [{"id": "P2", "name": "-Anna B.", "seconds": 40, "clips": ["C001", "C002"],
+                             "pictures": ["C002_0.jpg", "C001_0.jpg"]},
+                            {"id": "P3", "name": "", "seconds": 5, "clips": ["C003"], "pictures": []}]
+        assert client.post(url, json={"ids": ["P3"]}).status_code == 422
+        assert client.post(url, json={"ids": ["P3", "P3"]}).status_code == 422
+        assert client.post(url, json={"ids": ["P3", "../x"]}).status_code == 404
+        assert client.post(url, json={"ids": ["P3", "P9"]}).status_code == 422
+
 
 class TestPages:
     def test_all_pages_in_both_languages(self, client, cfg):
