@@ -459,6 +459,7 @@
   "memory.edit": "Bearbeiten",
   "memory.save": "Speichern",
   "memory.cancel": "Abbrechen",
+  "memory.discard": "Änderungen am Projektgedächtnis verwerfen?",
   "memory.saved": "Gespeichert. Die nächste Fassung nutzt es.",
   "memory.empty": "(leer – füllt sich mit der ersten Fassung)",
   "memory.error.running": "Claude arbeitet gerade an einer Fassung; ändere das Gedächtnis, wenn sie fertig ist.",

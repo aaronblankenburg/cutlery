@@ -139,6 +139,8 @@ milestone (and before any model switch), so a fresh session can continue without
   people is a mode: "Merge people" shows the boxes and a bar with "Merge these n" (enabled from two) and "Cancel".
   Claude's messages keep their line breaks (stream.lines) and are shown as Markdown in the job log (static/js/md.js:
   paragraphs, lists, tables, code, bold, links; DOM only, no innerHTML). Older logs were rebuilt from attempt-*.jsonl.
+- 0.2.3 (2026-11-18): the project memory is edited in a large dialog (monospace, character count, asks before
+  discarding changes) instead of the small field in the narrow column.
 
 ## Open questions
 

@@ -432,6 +432,14 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .memory-text { white-space: pre-wrap; font-family: var(--font-mono, monospace); font-size: var(--text-sm);
   max-height: 420px; overflow: auto; margin: var(--space-2) 0 0; color: var(--text-soft); }
 #memory-input, #job-note-input, #preferences { width: 100%; font-family: inherit; }
+/* a large editor in a dialog (project memory) */
+.dialog.editor-dialog { width: min(1100px, calc(100vw - 32px)); height: min(900px, calc(100dvh - 32px)); max-height: none;
+  padding: var(--space-4); }
+.editor-form { display: flex; flex-direction: column; gap: var(--space-3); height: 100%; }
+.editor-form h2 { margin: 0; }
+.editor-dialog #memory-input { flex: 1; min-height: 0; resize: none; font-family: var(--font-mono, monospace);
+  font-size: var(--text-sm); line-height: 1.55; padding: var(--space-3); tab-size: 2; }
+#memory-error { color: var(--error-fg); }
 .job-note { margin: var(--space-2) 0; }
 .job-note p { margin: var(--space-2) 0 0; }
 

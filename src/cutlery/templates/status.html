@@ -130,14 +130,21 @@
         <summary class="small">{{ t('memory.show') }}</summary>
         <pre class="memory-text" id="memory-text"></pre>
       </details>
-      <form class="stack" id="memory-form" hidden>
-        <label class="visually-hidden" for="memory-input">{{ t('memory.title') }}</label>
-        <textarea id="memory-input" rows="14" maxlength="20000"></textarea>
-        <div class="row">
-          <button class="button primary" type="submit">{{ t('memory.save') }}</button>
-          <button class="button" type="button" id="memory-cancel">{{ t('memory.cancel') }}</button>
-        </div>
-      </form>
+      <dialog class="dialog editor-dialog" id="memory-dialog" aria-labelledby="memory-dialog-title">
+        <form class="editor-form" id="memory-form">
+          <div class="row between">
+            <h2 id="memory-dialog-title">{{ t('memory.title') }} <span class="mono small muted">CLAUDE.md</span></h2>
+            <span class="small muted" id="memory-count"></span>
+          </div>
+          <label class="visually-hidden" for="memory-input">{{ t('memory.title') }}</label>
+          <textarea id="memory-input" maxlength="20000" spellcheck="true"></textarea>
+          <div class="row">
+            <button class="button primary" type="submit">{{ t('memory.save') }}</button>
+            <button class="button" type="button" id="memory-cancel">{{ t('memory.cancel') }}</button>
+            <span class="small" id="memory-error" role="alert"></span>
+          </div>
+        </form>
+      </dialog>
       <p class="small" id="memory-status" aria-live="polite"></p>
     </section>
   </div>

@@ -309,24 +309,42 @@ async function loadMemory() {
   $('memory-text').textContent = text || t('memory.empty');
   return text;
 }
+// editing in a large dialog (the card is in the narrow column); unsaved changes are asked about before closing
+let memorySaved = '';
+const memoryCount = () => { $('memory-count').textContent = `${$('memory-input').value.length.toLocaleString(lang)} / ${(20000).toLocaleString(lang)}`; };
+function closeMemory(force = false) {
+  if (!force && $('memory-input').value !== memorySaved && !confirm(t('memory.discard'))) return;
+  $('memory-dialog').close();
+}
 $('memory-edit').addEventListener('click', async () => {
-  $('memory-input').value = await loadMemory();
-  $('memory-form').hidden = false;
-  $('memory-box').hidden = true;
+  try {
+    memorySaved = (await loadMemory()) || '';
+  } catch (err) {
+    $('memory-status').textContent = err.message;
+    return;
+  }
+  $('memory-input').value = memorySaved;
+  $('memory-error').textContent = '';
+  memoryCount();
+  $('memory-dialog').showModal();
   $('memory-input').focus();
+  $('memory-input').setSelectionRange(0, 0);
+  $('memory-input').scrollTop = 0;
 });
-$('memory-cancel').addEventListener('click', () => { $('memory-form').hidden = true; $('memory-box').hidden = false; });
+$('memory-input').addEventListener('input', memoryCount);
+$('memory-cancel').addEventListener('click', () => closeMemory());
+$('memory-dialog').addEventListener('cancel', (e) => { e.preventDefault(); closeMemory(); });   // Esc
 $('memory-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
     await api(`/api/projects/${project}/memory`, { method: 'PUT', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ text: $('memory-input').value }) });
-    $('memory-form').hidden = true;
-    $('memory-box').hidden = false;
+    memorySaved = $('memory-input').value;
+    closeMemory(true);
     $('memory-status').textContent = t('memory.saved');
     await loadMemory();
   } catch (err) {
-    $('memory-status').textContent = err.message;
+    $('memory-error').textContent = err.message;
   }
 });
 $('memory-box').addEventListener('toggle', () => { if ($('memory-box').open) loadMemory().catch(() => {}); });

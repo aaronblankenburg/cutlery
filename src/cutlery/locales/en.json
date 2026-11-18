@@ -459,6 +459,7 @@
   "memory.edit": "Edit",
   "memory.save": "Save",
   "memory.cancel": "Cancel",
+  "memory.discard": "Discard your changes to the project memory?",
   "memory.saved": "Saved. The next cut uses it.",
   "memory.empty": "(empty – it fills with the first cut)",
   "memory.error.running": "Claude is working on a cut right now; change the memory when it is done.",
