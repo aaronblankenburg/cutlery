@@ -146,6 +146,10 @@ milestone (and before any model switch), so a fresh session can continue without
   sent an empty mapping and the package pointed to the footage root instead of the subfolders (seen with
   Sossusvlei: footage in Aaron/, Alex/Videos/, Alex/Gopro/, uploaded with bare file names). Download is disabled
   while the check runs. Hidden files (FilmCraft's .fcproj.lock) are left out of the ZIP.
+- 0.2.5 (2026-11-18): cutter 0.5.3. The FilmCraft package refers to its own files (music, maps) relative to the
+  project file; FilmCraft resolves them against the project's folder (checked with filmcraft-cli: found after the
+  whole folder is moved, missing when only the project is copied elsewhere, kept relative on save). Originals stay
+  absolute. Premiere/FCPXML stay absolute: relative URLs are not documented there and could not be tested.
 
 ## Open questions
 
