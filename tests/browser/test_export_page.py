@@ -56,6 +56,12 @@ def test_check_originals_and_download(page, server, clips, tmp_path):
     assert "Day 2\\ntsc 29.97.mov → Day 2\\ntsc renamed.mov" in lines
     assert page.locator("#root-mismatch").is_hidden()          # path and folder name agree
 
+    # the result survives a reload: the mapping still goes with the download
+    page.reload()
+    page.wait_for_function("() => window.cutleryExport && window.cutleryExport.result")
+    assert page.input_value("#relink") == json.dumps(result["relink"], separators=(",", ":"))
+    assert page.inner_text("#n-renamed") == "1" and "ntsc renamed.mov" in page.inner_text("#check-lines")
+
     with page.expect_download() as dl:
         page.click("#download")
     path = dl.value.path()

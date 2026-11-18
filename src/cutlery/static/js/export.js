@@ -105,41 +105,55 @@ async function check(fileList) {
   let found = 0, renamed = 0, missing = 0, done = 0;
   const progress = $('check-progress');
   progress.hidden = false;
-  for (const c of clips) {
-    progress.textContent = t('export.check.running', { done: ++done, total: clips.length });
-    const same = byPath.get(c.rel_path);
-    if (same && same.size === c.size && sameFingerprint(await fp(same), c.fingerprint)) {
-      found++;
-      continue;
+  $('download').disabled = true;           // the mapping is only complete at the end
+  try {
+    for (const c of clips) {
+      progress.textContent = t('export.check.running', { done: ++done, total: clips.length });
+      const same = byPath.get(c.rel_path);
+      if (same && same.size === c.size && sameFingerprint(await fp(same), c.fingerprint)) {
+        found++;
+        continue;
+      }
+      let hit = null;
+      for (const f of bySize.get(c.size) || []) {
+        if (f !== same && sameFingerprint(await fp(f), c.fingerprint)) { hit = f; break; }
+      }
+      if (hit) {
+        renamed++;
+        relink[c.rel_path] = relPath(hit);
+        lines.push(['info', t('export.check.renamed_line', { old: c.rel_path, new: relPath(hit) })]);
+      } else {
+        missing++;
+        lines.push(['error', t(same ? 'export.check.changed_line' : 'export.check.missing_line', { path: c.rel_path })]);
+      }
     }
-    let hit = null;
-    for (const f of bySize.get(c.size) || []) {
-      if (f !== same && sameFingerprint(await fp(f), c.fingerprint)) { hit = f; break; }
-    }
-    if (hit) {
-      renamed++;
-      relink[c.rel_path] = relPath(hit);
-      lines.push(['info', t('export.check.renamed_line', { old: c.rel_path, new: relPath(hit) })]);
-    } else {
-      missing++;
-      lines.push(['error', t(same ? 'export.check.changed_line' : 'export.check.missing_line', { path: c.rel_path })]);
-    }
+  } finally {
+    $('download').disabled = false;
   }
   progress.hidden = true;
-  $('relink').value = JSON.stringify(relink);
-  $('n-found').textContent = found;
-  $('n-renamed').textContent = renamed;
-  $('n-missing').textContent = missing;
+  const result = { found, renamed, missing, relink, lines, folder: pickedFolder };
+  showResult(result);
+  try {
+    localStorage.setItem(`${store}-check`, JSON.stringify(result));
+  } catch { /* private window: the result lasts until the page is left */ }
+}
+
+// The result of the check: the mapping goes with the download, so it is kept (per browser) across reloads.
+function showResult(r) {
+  $('relink').value = JSON.stringify(r.relink || {});
+  $('n-found').textContent = r.found;
+  $('n-renamed').textContent = r.renamed;
+  $('n-missing').textContent = r.missing;
   $('check-counts').hidden = false;
   $('check-skip').hidden = true;
   const ul = $('check-lines');
-  ul.replaceChildren(...lines.map(([kind, text]) => {
+  ul.replaceChildren(...(r.lines || []).map(([kind, text]) => {
     const li = document.createElement('li');
     li.className = kind;
     li.textContent = form.os.value === 'windows' ? text.replaceAll('/', '\\') : text;
     return li;
   }));
-  window.cutleryExport.result = { found, renamed, missing, relink };
+  window.cutleryExport.result = r;
 }
 
 $('check-input').addEventListener('change', (e) => check(e.target.files));
@@ -179,3 +193,11 @@ form.addEventListener('submit', async (e) => {
 });
 
 window.cutleryExport = { check, folder };
+try {
+  const saved = JSON.parse(localStorage.getItem(`${store}-check`) || 'null');
+  if (saved) {
+    pickedFolder = saved.folder || null;
+    showResult(saved);
+    updateWhere();
+  }
+} catch { /* nothing saved */ }

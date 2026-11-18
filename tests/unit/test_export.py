@@ -55,6 +55,7 @@ class TestDownload:
         names = set(z.namelist())
         assert {"Film_cut1.xml", "IMPORT-PREMIERE.txt", "music/LIZENZEN.txt", "music/song.mp3"} <= names
         assert "music/LICENSES.txt" not in names                         # replaced by the German file
+        assert not [n for n in names if n.split("/")[-1].startswith(".")]  # no lock files
         timeline = json.loads(z.read("Film_cut1.xml"))
         assert timeline == {"os": "windows", "root": "D:\\Videos\\Island 2026", "relink": relink, "to": "premiere"}
         readme = z.read("IMPORT-PREMIERE.txt").decode()

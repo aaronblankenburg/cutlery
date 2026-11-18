@@ -141,6 +141,11 @@ milestone (and before any model switch), so a fresh session can continue without
   paragraphs, lists, tables, code, bold, links; DOM only, no innerHTML). Older logs were rebuilt from attempt-*.jsonl.
 - 0.2.3 (2026-11-18): the project memory is edited in a large dialog (monospace, character count, asks before
   discarding changes) instead of the small field in the narrow column.
+- 0.2.4 (2026-11-18): the export check's result (the relink mapping) is kept per browser and restored after a
+  reload; before, it lived only in the open page, so a reload or a download started while the check was running
+  sent an empty mapping and the package pointed to the footage root instead of the subfolders (seen with
+  Sossusvlei: footage in Aaron/, Alex/Videos/, Alex/Gopro/, uploaded with bare file names). Download is disabled
+  while the check runs. Hidden files (FilmCraft's .fcproj.lock) are left out of the ZIP.
 
 ## Open questions
 

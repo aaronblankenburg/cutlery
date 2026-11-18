@@ -29,6 +29,7 @@ if sys.argv[1:2] == ["export"]:
                                             "relink": relink, "to": args["--to"]}))
     (out / "music" / "LICENSES.txt").write_text("english licences")
     (out / "music" / "song.mp3").write_bytes(b"ID3")
+    (out / f".{timeline}.lock").write_bytes(b"")               # FilmCraft leaves one next to the project
     print(json.dumps({"timeline": timeline, "notes": [], "music": [
         {"cue": "M1", "title": "Song", "artist": "Band", "license": "CC BY 4.0", "source": "https://example.org/song",
          "file": "music/song.mp3"}]}))

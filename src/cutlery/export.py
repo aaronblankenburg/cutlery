@@ -86,7 +86,8 @@ def build(cfg, paths: ProjectPaths, title: str, req: dict, lang: str) -> pathlib
         target = tmp.parent / f"{tmp.name}.zip"
         with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(pkg.rglob("*")):
-                if f.is_file():
+                # hidden files (FilmCraft's .<project>.fcproj.lock) are not part of the package
+                if f.is_file() and not any(x.startswith(".") for x in f.relative_to(pkg).parts):
                     # audio and pictures are compressed already
                     kind = zipfile.ZIP_STORED if f.suffix.lower() in (".png", ".mp3", ".m4a", ".ogg", ".opus", ".flac", ".jpg") else zipfile.ZIP_DEFLATED
                     z.write(f, f.relative_to(pkg).as_posix(), compress_type=kind)
