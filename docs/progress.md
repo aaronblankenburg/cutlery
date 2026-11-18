@@ -150,6 +150,13 @@ milestone (and before any model switch), so a fresh session can continue without
   project file; FilmCraft resolves them against the project's folder (checked with filmcraft-cli: found after the
   whole folder is moved, missing when only the project is copied elsewhere, kept relative on save). Originals stay
   absolute. Premiere/FCPXML stay absolute: relative URLs are not documented there and could not be tested.
+- 0.2.6 (2026-11-18): cutter 0.5.4: the review timeline navigates as in Premiere (wheel scrolls the zoomed
+  timeline, Alt/Ctrl + wheel and +/- zoom, \ whole cut / last zoom, arrows by frame, Shift by 5, up/down by edit,
+  Home/End, a bar for the visible part while zoomed). Colour correction is planned and started in cutter branch
+  `color`: suggestion per shot (exposure, white balance from near-neutral pixels, haze), applied in FilmCraft,
+  switchable off in the review (whole film / per shot), before/after stills; decided 2026-11-18: on as a
+  suggestion, the review can switch it off. FilmCraft lumetri calibration: exposure in stops (v·2^(e/2.2)),
+  temperature ln(R/B)≈0.0034·t, tint ln(G)≈−0.0015·t, blacks +0.0014·b.
 
 ## Open questions
 
