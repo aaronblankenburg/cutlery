@@ -32,6 +32,8 @@ function label(ev) {
   }
   if (ev.kind === 'text') return ['think', t('jobs.kind.text')];
   if (ev.kind === 'think') return ['think', t('jobs.kind.think')];
+  if (ev.kind === 'egress') return ['decision', t('jobs.kind.egress')];
+  if (ev.kind === 'egress_allowed') return ['ok', t('jobs.kind.egress_allowed')];
   if (['done', 'result'].includes(ev.kind)) return ['ok', t(`jobs.kind.${ev.kind === 'done' ? 'done' : 'result'}`)];
   if (['paused', 'failed', 'error'].includes(ev.kind)) return ['bad', t(`jobs.kind.${ev.kind}`)];
   return ['tool', has(`jobs.kind.${ev.kind}`) ? t(`jobs.kind.${ev.kind}`) : ev.kind];
@@ -41,7 +43,12 @@ function label(ev) {
 function text(ev) {
   if (ev.kind === 'queued') return t('jobs.log.queued');
   if (ev.kind === 'waiting') return t(`jobs.log.waiting_${ev.reason}`);
-  if (ev.kind === 'start' && !ev.session_id) return t('jobs.log.attempt', { attempt: (ev.text || '').match(/\d+/)?.[0] || 1 });
+  if (ev.kind === 'start' && !ev.session_id) {
+    const s = t('jobs.log.attempt', { attempt: (ev.text || '').match(/\d+/)?.[0] || 1 });
+    return ev.reachable?.length ? `${s} ${t('jobs.log.reachable', { domains: ev.reachable.join(', ') })}` : s;
+  }
+  if (ev.kind === 'egress') return t('jobs.log.egress', { domain: ev.domain });
+  if (ev.kind === 'egress_allowed') return t('jobs.log.egress_allowed', { domain: ev.domain });
   if (ev.kind === 'start') return t('jobs.log.session', { model: ev.model || '' });
   if (ev.kind === 'cancelled') return t('jobs.state.cancelled');
   return ev.text || '';
@@ -98,7 +105,10 @@ function follow(j) {
   source?.close();
   showJob(j);
   source = new EventSource(`/api/jobs/${j.id}/events?after=${shown}`);
-  source.addEventListener('log', (e) => { const ev = JSON.parse(e.data); shown = ev.n; logLine(ev); });
+  source.addEventListener('log', (e) => {
+    const ev = JSON.parse(e.data); shown = ev.n; logLine(ev);
+    if (ev.kind === 'egress' || ev.kind === 'egress_allowed') loadEgress().catch(() => {});
+  });
   source.addEventListener('job', (e) => {
     const cur = JSON.parse(e.data);
     const was = current?.state;
@@ -146,6 +156,45 @@ for (const input of document.querySelectorAll('[data-person]')) {
     }
   });
 }
+
+// ------------------------------------------------------------------ internet access: Claude's questions
+
+async function loadEgress() {
+  const d = await api(`/api/projects/${project}/egress`);
+  const asks = d.requests.filter((r) => r.state === 'asked');
+  $('egress-asks').replaceChildren(...asks.map((r) => {
+    const box = document.createElement('div');
+    box.className = 'banner-card info';
+    const text = document.createElement('span');
+    text.textContent = t('egress.ask', { domain: r.domain });
+    const yes = document.createElement('button');
+    yes.className = 'button primary';
+    yes.type = 'button';
+    yes.textContent = t('egress.allow');
+    const no = document.createElement('button');
+    no.className = 'button';
+    no.type = 'button';
+    no.textContent = t('egress.refuse');
+    const answer = (allow) => api(`/api/projects/${project}/egress`, { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ domain: r.domain, allow }) })
+      .then(loadEgress).catch(showError);
+    yes.addEventListener('click', () => answer(true));
+    no.addEventListener('click', () => answer(false));
+    box.append(text, yes, no);
+    return box;
+  }));
+  const items = [
+    ...d.allowed.map((a) => [a.domain, t(`egress.source.${a.source}`)]),
+    ...d.requests.filter((r) => r.state === 'refused').map((r) => [r.domain, t('egress.source.refused')]),
+  ];
+  $('egress-list').replaceChildren(...(items.length ? items : [[t('egress.none'), '']]).map(([dom, src]) => {
+    const li = document.createElement('li');
+    li.textContent = src ? `${dom} · ${src}` : dom;
+    return li;
+  }));
+}
+loadEgress().catch(() => {});
+setInterval(() => loadEgress().catch(() => {}), 10000);
 
 // ------------------------------------------------------------------ project memory (CLAUDE.md)
 

@@ -30,6 +30,7 @@ import threading
 import urllib.parse
 
 from . import config as config_mod
+from . import egress
 
 log = logging.getLogger("cutlery.runner")
 
@@ -104,13 +105,19 @@ def allowed(host: str, allow) -> bool:
 
 
 class EgressProxy(socketserver.ThreadingTCPServer):
-    """HTTPS-only forward proxy (CONNECT) for an allowlist of hosts."""
+    """HTTPS-only forward proxy (CONNECT) for an allowlist of hosts. A job container may also reach the hosts the
+    user named for its project (egress.py): `extra` maps the container's address on the job network to them."""
     daemon_threads = True
     allow_reuse_address = True
 
-    def __init__(self, address, allow):
+    def __init__(self, address, allow, extra=None, on_denied=None):
         self.allow = tuple(allow)
+        self.extra = extra if extra is not None else {}
+        self.on_denied = on_denied or (lambda host, client_ip: None)
         super().__init__(address, _ProxyHandler)
+
+    def allows(self, host: str, client_ip: str) -> bool:
+        return allowed(host, self.allow) or allowed(host, self.extra.get(client_ip, ()))
 
 
 class _ProxyHandler(socketserver.StreamRequestHandler):
@@ -125,8 +132,10 @@ class _ProxyHandler(socketserver.StreamRequestHandler):
             self.wfile.write(b"HTTP/1.1 405 Only CONNECT\r\n\r\n")
             return
         host, _, port = parts[1].rpartition(":")
-        if port != "443" or not allowed(host, self.server.allow):
+        if port != "443" or not self.server.allows(host, self.client_address[0]):
             log.warning("egress denied: %s", parts[1])
+            if port == "443":
+                self.server.on_denied(host, self.client_address[0])
             self.wfile.write(b"HTTP/1.1 403 Forbidden by Cutlery egress allowlist\r\n\r\n")
             return
         try:
@@ -177,6 +186,9 @@ class Runner:
         self.memory = int(float(self.env.get("CUTLERY_JOB_MEMORY_GB") or 8) * 1024 ** 3)
         self.exits: dict[str, int] = {}
         self.lock = threading.Lock()
+        self.extra: dict[str, tuple] = {}        # container address -> hosts the user named (EgressProxy.extra)
+        self.extra_jobs: dict[str, str] = {}     # container address -> job (Claude jobs)
+        self.denied: dict[str, list[str]] = {}   # job -> domains it was refused and the user may allow
         me = self.docker.self_container()
         self.image = me["Image"]
         self.mounts = {m["Destination"]: m["Source"] for m in me.get("Mounts", [])}
@@ -357,8 +369,12 @@ class Runner:
                 raise ValueError("an analysis job runs cutter analyze")
         else:
             raise ValueError("unknown job kind")
+        allow = spec.get("allow") or []
+        if (not isinstance(allow, list) or len(allow) > 2 * egress.MAX_DOMAINS
+                or not all(egress.valid_rule(r) for r in allow)):
+            raise ValueError("allow must be a list of domains")
         return {"job": job, "project": project, "data": data, "work": work, "argv": argv, "env": env, "kind": kind,
-                "stdout": spec["stdout"], "stderr": spec["stderr"]}
+                "stdout": spec["stdout"], "stderr": spec["stderr"], "allow": allow if kind == "claude" else []}
 
     def container_spec(self, s: dict) -> dict:
         host = lambda dest: self.mounts[dest].rstrip("/")          # host path of a tree
@@ -423,7 +439,57 @@ class Runner:
             pass
         c = self.docker.call("POST", f"/containers/create?name={name}", self.container_spec(s))
         self.docker.call("POST", f"/containers/{c['Id']}/start")
+        self._allow_extra(s["job"], c["Id"], s["allow"])
         log.info("job %s started in container %s", s["job"], c["Id"][:12])
+
+    def _allow_extra(self, job: str, container: str, rules: list[str]) -> None:
+        """The hosts the user named for the project, for this container's address only (until the job ends)."""
+        try:
+            nets = self.docker.call("GET", f"/containers/{container}/json")["NetworkSettings"]["Networks"]
+            ip = nets[NETWORK]["IPAddress"]
+        except (RuntimeError, KeyError, TypeError) as e:
+            log.warning("job %s: no address on %s (%s); only the fixed allowlist applies", job, NETWORK, e)
+            ip = None
+        with self.lock:
+            for k in [k for k, v in self.extra_jobs.items() if v == job or k == ip]:
+                self.extra_jobs.pop(k, None)
+                self.extra.pop(k, None)
+            self.denied.pop(job, None)
+            if ip:
+                self.extra[ip] = tuple(rules)
+                self.extra_jobs[ip] = job
+        if rules:
+            log.info("job %s may also reach %s", job, ", ".join(r for r in rules if not r.startswith("*.")))
+
+    def note_denied(self, host: str, client_ip: str) -> None:
+        """A Claude job was refused a host: keep its domain for the user to allow (EgressProxy.on_denied)."""
+        d = egress.registrable(host)
+        with self.lock:
+            job = self.extra_jobs.get(client_ip)
+            if not d or not job:
+                return
+            lst = self.denied.setdefault(job, [])
+            if d not in lst and len(lst) < 20:
+                lst.append(d)
+
+    def allow_domain(self, job: str, domain: str) -> None:
+        """The user allowed a domain for the running job: it and its subdomains, from now on."""
+        if not JOB_ID.match(job) or egress.registrable(domain) != domain:
+            raise ValueError("invalid job id or domain")
+        with self.lock:
+            for ip, j in self.extra_jobs.items():
+                if j == job:
+                    self.extra[ip] = tuple(dict.fromkeys((*self.extra.get(ip, ()), *egress.rules({domain}))))
+            if domain in self.denied.get(job, []):
+                self.denied[job].remove(domain)
+        log.info("job %s may now also reach %s", job, domain)
+
+    def _forget_extra(self, job: str) -> None:
+        with self.lock:
+            self.denied.pop(job, None)
+            for k in [k for k, v in self.extra_jobs.items() if v == job]:
+                self.extra_jobs.pop(k, None)
+                self.extra.pop(k, None)
 
     def state(self, job: str) -> dict:
         if not JOB_ID.match(job):
@@ -437,8 +503,10 @@ class Runner:
             return {"running": False, "exit_code": -1}
         st = c.get("State") or {}
         if st.get("Running"):
-            return {"running": True}
+            with self.lock:
+                return {"running": True, "denied": list(self.denied.get(job, []))}
         code = int(st.get("ExitCode", -1))
+        self._forget_extra(job)
         with self.lock:
             self.exits[job] = code
         self.docker.call("DELETE", f"/containers/cutlery-job-{job}?force=1")
@@ -451,6 +519,7 @@ class Runner:
             self.docker.call("POST", f"/containers/cutlery-job-{job}/stop?t=10", timeout=30)
         except RuntimeError:
             pass
+        self._forget_extra(job)
 
     def status(self) -> dict:
         return {"kind": self.auth.kind if self.auth else None, "auth_error": self.auth_error, "source": self.source,
@@ -497,6 +566,13 @@ class _Api(http.server.BaseHTTPRequestHandler):
             if m and method == "DELETE":
                 self.runner.stop(m.group(1))
                 return self._send(200, {"ok": True})
+            m = re.fullmatch(r"/jobs/([0-9a-f]+)/allow", self.path)
+            if m and method == "POST":
+                n = int(self.headers.get("content-length") or 0)
+                if n > 4096:
+                    return self._send(413, {"error": "request too large"})
+                self.runner.allow_domain(m.group(1), str(json.loads(self.rfile.read(n)).get("domain", "")))
+                return self._send(200, {"ok": True})
             return self._send(404, {"error": "not found"})
         except NoCredentialError as e:
             return self._send(409, {"error": str(e), "reason": "auth"})
@@ -538,7 +614,7 @@ def serve(cfg) -> None:
         raise SystemExit(f"cutlery runner: {e}")
     runner.vision_done.clear()
     threading.Thread(target=runner.fetch_vision_models, name="vision-models", daemon=True).start()
-    proxy = EgressProxy(("0.0.0.0", PROXY_PORT), runner.allow)
+    proxy = EgressProxy(("0.0.0.0", PROXY_PORT), runner.allow, runner.extra, runner.note_denied)
     threading.Thread(target=proxy.serve_forever, name="egress", daemon=True).start()
     path = cfg.runner_socket
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -434,3 +434,44 @@ def test_memory_and_preferences_api(client, app, cfg):
     assert client.put("/api/preferences", json={"text": "Instrumental music only."}).status_code == 200
     assert client.get("/api/preferences").json()["text"] == "Instrumental music only.\n"
     assert "Meine Vorlieben" in client.get("/settings", headers={"Accept-Language": "de"}).text
+
+
+def test_a_refused_domain_is_asked_for_and_allowed_for_the_running_job(env, monkeypatch):
+    from cutlery import egress
+    monkeypatch.setenv("FAKE_CLAUDE_SCENARIO", "slow")
+    opened, asked = [], []
+    env.jobs.executor.denied = lambda job: ["example.org", "refused.org"]
+    env.jobs.executor.allow = lambda job, d: opened.append((job, d))
+
+    class N:
+        def egress_asked(self, job, project, domain):
+            asked.append(domain)
+
+        def job_ended(self, *a):
+            pass
+    env.jobs.notifier = N()
+    pid = env.project()
+    egress.ask(env.db, pid, "old", "refused.org")
+    egress.refuse(env.db, pid, "refused.org")                    # refused before: not asked again
+    j = env.jobs.create(pid, "draft")
+    env.wait(j["id"], "running")
+    end = time.time() + 10
+    while not asked and time.time() < end:
+        time.sleep(0.05)
+    assert asked == ["example.org"]
+    assert [e["domain"] for e in env.jobs.events(j["id"]) if e["kind"] == "egress"] == ["example.org"]
+    env.jobs.answer_egress(pid, "example.org", True)
+    assert (j["id"], "example.org") in opened
+    assert "example.org" in egress.for_project(env.db, pid)
+    env.jobs.cancel(j["id"])
+
+
+def test_egress_api(client, app):
+    r = client.post("/projects/new", data={"name": "Net"}, follow_redirects=False)
+    pid = r.headers["location"].split("/")[2]
+    client.put(f"/api/projects/{pid}/briefing", json={"prompt": "Maps from https://tile.opentopomap.org please"})
+    d = client.get(f"/api/projects/{pid}/egress").json()
+    assert d["allowed"] == [{"domain": "opentopomap.org", "source": "briefing"}]
+    assert client.post(f"/api/projects/{pid}/egress", json={"domain": "x", "allow": True}).status_code == 422
+    assert client.post(f"/api/projects/{pid}/egress", json={"domain": "example.org", "allow": True}).status_code == 200
+    assert {a["domain"] for a in client.get(f"/api/projects/{pid}/egress").json()["allowed"]} == {"opentopomap.org", "example.org"}

@@ -21,7 +21,7 @@ import secrets
 import threading
 import time
 
-from . import cutter_project, memory, stream
+from . import cutter_project, egress, memory, stream
 from .executor import NoCredential
 from .db import Database, now
 
@@ -52,6 +52,10 @@ PROMPTS = {
              "answer every comment of {previous} in the language of the comment, and finish with the timeline, the "
              "FilmCraft export and `cutter review-data {cut}`."),
 }
+EGRESS = (" Internet access goes through an allowlist; a host it refuses (HTTP 403 \"Forbidden by Cutlery egress "
+          "allowlist\") is shown to the user, who may allow it while you work: if you need it, go on with other steps "
+          "and try again a few times over the next minutes (wait with sleep 60 between tries, at most 10 minutes); "
+          "if it stays refused, do without it and record that in decisions.json.")
 MEMORY = (" The project memory is CLAUDE.md in this folder (Claude Code has read it already): follow it. Before you "
           "finish, update it for the next cuts: what you learnt about the user's wishes (from the briefing, the notes and "
           "the comments), what was tried and rejected, open points; keep it short and do not repeat what is in other files.")
@@ -155,6 +159,8 @@ class Jobs:
             with self.db.tx() as con:
                 con.execute("INSERT INTO jobs (id, project_id, kind, cut, state, model, created, note) "
                             "VALUES (?,?,?,?,?,?,?,?)", (jid, project_id, kind, cut, "queued", model, now(), note or None))
+        if note:
+            egress.record(self.db, project_id, "note", note)
         self._event(jid, {"kind": "queued", "text": f"{kind} {cut}, model {model}"})
         log.info("project %s: job %s queued (%s %s, %s)", project_id, jid, kind, cut, model)
         self.wake()
@@ -262,7 +268,7 @@ class Jobs:
         cuts = cutter_project.cuts(self.projects.paths(j["project_id"]))
         previous = cuts[-1] if cuts and j["kind"] == "next" else ""
         paths = self.projects.paths(j["project_id"])
-        prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous) + WHERE.format(work=paths.work) + MEMORY
+        prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous) + WHERE.format(work=paths.work) + MEMORY + EGRESS
         if j["attempt"] > 1:
             prompt += RESUMED.format(attempt=j["attempt"])
         prefs = memory.read_preferences(self.cfg).strip()
@@ -288,7 +294,9 @@ class Jobs:
         cutter_project.write(paths, self.projects.get(j["project_id"])["name"])     # the current cutter.toml
         config_dir = d / f"claude-{j['attempt']}"            # a fresh Claude Code configuration per session
         config_dir.mkdir(exist_ok=True)
+        named = egress.for_project(self.db, j["project_id"])          # hosts the user named: reachable too
         spec = {"job": j["id"], "project": j["project_id"], "argv": self.command(j), "cwd": str(paths.data),
+                "allow": egress.rules(named),
                 "stdout": str(out), "stderr": str(err),
                 "env": {"CUTTER_PROJECT": str(paths.data), "TMPDIR": str(paths.work / "tmp"),
                         "CLAUDE_CONFIG_DIR": str(config_dir), "HOME": str(config_dir)}}
@@ -297,7 +305,8 @@ class Jobs:
         self.read_pos[j["id"]] = 0
         self.results.pop(j["id"], None)
         self.started_at[j["id"]] = time.monotonic()
-        self._event(j["id"], {"kind": "start", "text": f"attempt {j['attempt']}, model {j['model']}"})
+        self._event(j["id"], {"kind": "start", "text": f"attempt {j['attempt']}, model {j['model']}"
+                              + (f"; also reachable: {', '.join(named)}" if named else ""), "reachable": named})
         try:
             self.executor.start(spec)
         except NoCredential as e:
@@ -336,6 +345,8 @@ class Jobs:
     def _follow(self, j) -> None:
         self._read_new(j)
         code = self.executor.poll(j["id"])
+        if code is None:
+            self._ask_egress(j)
         timed_out = time.monotonic() - self.started_at.get(j["id"], time.monotonic()) > self.cfg.job_timeout_s
         if code is None and not timed_out:
             return
@@ -353,6 +364,43 @@ class Jobs:
                 # Claude ended normally but made no cut (it says why in its last message)
                 result = {**result, "state": "failed", "reason": "no_cut"}
         self._finish(j, result)
+
+    def _ask_egress(self, j) -> None:
+        """Domains the running job was refused: allowed already (by the user meanwhile) → open them for the job;
+        new → ask the user (log event, notification); refused before → nothing."""
+        try:
+            denied = self.executor.denied(j["id"])
+        except Exception as e:                     # never let a question break following the job
+            log.warning("job %s: cannot read refused domains: %s", j["id"], e)
+            return
+        if not denied:
+            return
+        granted = set(egress.for_project(self.db, j["project_id"]))
+        for d in denied:
+            if d in granted:
+                self.allow_domain(j, d)
+            elif egress.ask(self.db, j["project_id"], j["id"], d):
+                log.info("job %s asks for %s", j["id"], d)
+                self._event(j["id"], {"kind": "egress", "domain": d, "text": d})
+                if self.notifier:
+                    self.notifier.egress_asked(self.get(j["id"]), self.projects.get(j["project_id"]), d)
+
+    def allow_domain(self, j, domain) -> None:
+        try:
+            self.executor.allow(j["id"], domain)
+        except Exception as e:
+            log.warning("job %s: cannot open %s: %s", j["id"], domain, e)
+
+    def answer_egress(self, project_id: str, domain: str, allow: bool) -> None:
+        """The user's answer to a question for a domain (status page or a notification)."""
+        if allow:
+            egress.grant(self.db, project_id, domain)
+            j = self.active(project_id)
+            if j and j["state"] == "running":
+                self.allow_domain(j, domain)
+                self._event(j["id"], {"kind": "egress_allowed", "domain": domain, "text": domain})
+        else:
+            egress.refuse(self.db, project_id, domain)
 
     def _finish(self, j, result, notify=True) -> None:
         res = self.results.pop(j["id"], {}) or {}

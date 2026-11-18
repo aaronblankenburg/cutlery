@@ -412,3 +412,9 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 #memory-input, #job-note-input, #preferences { width: 100%; font-family: inherit; }
 .job-note { margin: var(--space-2) 0; }
 .job-note p { margin: var(--space-2) 0 0; }
+
+/* internet access: Claude's questions, the extra domains */
+.egress-asks { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); }
+.egress-asks:empty { display: none; }
+.banner-card.info { background: var(--info-bg); border: 1px solid #2E4566; color: var(--text); }
+.egress-list { margin: var(--space-2) 0 0; padding-left: 18px; color: var(--text-soft); }

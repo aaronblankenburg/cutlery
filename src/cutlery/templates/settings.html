@@ -37,6 +37,27 @@
   {% endif %}
 </section>
 
+<section class="card stack narrow" id="telegram-card">
+  <header><h2>{{ t('telegram.title') }}</h2></header>
+  <p class="small muted">{{ t('telegram.lead') }}</p>
+  <p class="small" id="telegram-state" aria-live="polite"></p>
+  <form class="stack" id="telegram-token-form" autocomplete="off" hidden>
+    <div>
+      <label for="telegram-token">{{ t('telegram.token') }}</label>
+      <input type="password" id="telegram-token" autocomplete="new-password" spellcheck="false" placeholder="123456789:AA…">
+      <p class="small muted">{{ t('telegram.token_hint') }}</p>
+    </div>
+    <div class="row"><button class="button primary" type="submit">{{ t('telegram.save_token') }}</button></div>
+  </form>
+  <div class="row" id="telegram-actions" hidden>
+    <a class="button primary" id="telegram-link" href="#" target="_blank" rel="noopener" hidden>{{ t('telegram.open_link') }}</a>
+    <button class="button primary" type="button" id="telegram-connect">{{ t('telegram.connect') }}</button>
+    <button class="button" type="button" id="telegram-test">{{ t('telegram.test') }}</button>
+    <button class="button" type="button" id="telegram-unlink">{{ t('telegram.unlink') }}</button>
+    <button class="button danger" type="button" id="telegram-remove">{{ t('telegram.remove_token') }}</button>
+  </div>
+</section>
+
 <section class="card stack narrow" id="preferences-card">
   <header><h2>{{ t('settings.preferences.title') }}</h2></header>
   <form class="stack" id="preferences-form">

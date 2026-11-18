@@ -59,6 +59,13 @@ class LocalExecutor:
             proc = self.procs.get(job)
         return proc is not None and proc.poll() is None
 
+    def denied(self, job) -> list[str]:
+        """Domains the job was refused (only the runner's egress proxy refuses any)."""
+        return []
+
+    def allow(self, job, domain) -> None:
+        pass
+
     def stop(self, job, timeout=10) -> None:
         with self.lock:
             proc = self.procs.pop(job, None)
@@ -137,6 +144,15 @@ class RunnerClient:
             return bool(self._call("GET", f"/jobs/{job}").get("running"))
         except RunnerError:
             return False
+
+    def denied(self, job) -> list[str]:
+        try:
+            return list(self._call("GET", f"/jobs/{job}").get("denied") or [])
+        except RunnerError:
+            return []
+
+    def allow(self, job, domain) -> None:
+        self._call("POST", f"/jobs/{job}/allow", {"domain": domain})
 
     def stop(self, job, timeout=10) -> None:
         try:

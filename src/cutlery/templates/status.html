@@ -26,6 +26,8 @@
   <button class="button primary" type="button" id="job-resume">{{ t('jobs.resume') }}</button>
 </div>
 
+<div class="egress-asks" id="egress-asks" aria-live="polite"></div>
+
 <div class="status-grid" id="jobs" data-project="{{ project.id }}">
   <section class="card job-card">
     <div class="job-head">
@@ -89,6 +91,12 @@
         {% endfor %}
       </ul>
       {% else %}<p class="small muted">{{ t('cuts.none') }}</p>{% endif %}
+    </section>
+
+    <section class="card" id="egress-card">
+      <h2>{{ t('egress.title') }}</h2>
+      <p class="small muted">{{ t('egress.lead') }}</p>
+      <ul class="egress-list small" id="egress-list"></ul>
     </section>
 
     <section class="card" id="memory-card">

@@ -111,7 +111,13 @@ milestone (and before any model switch), so a fresh session can continue without
   other shell command (`cd …; ls`, python, ffmpeg), and the agent looked for the analysis in the data tree. Now the
   agent may use Bash (the job container is the boundary), the prompt names the work folder, and a session that ends
   without cuts/<cut>/edit.json is `failed` (reason no_cut) with Claude's last message.
-- 0.2.0 (2026-11-18, needs cutter 0.5.0): OpenTopoMap tile hosts added to the egress allowlist (the agent could not fetch map tiles); the review page is cutter's own review app
+- 0.2.0 (2026-11-18, cutter 0.5.0): internet access per project: domains the user names in the briefing, notes,
+  comments or preferences are reachable for that project's jobs (with subdomains; egress.py, recorded when the
+  user saves, never read from files the agent can write); a domain the proxy refuses a running job is asked for on
+  the status page (and in Telegram) and allowed for the running job at once (runner maps container address → rules).
+  OpenTopoMap tile hosts in the fixed list. Telegram: the operator's bot (token on the settings page or
+  CUTLERY_TELEGRAM_BOT_TOKEN), the user links their account by a t.me deep link with a one-time code; messages
+  for cut done/paused/failed, analysis done, domain questions (inline buttons). Also: the review page is cutter's own review app
   (served unchanged from the cutter package in a full-width frame, Cutlery's stylesheet added; the host's settings
   person/submit/embedded/ui_language go into the `app` object of /api/cuts) with Cutlery's bar above it ("review
   done → next cut" opens a dialog with notes for the next cut). Notes for a cut (jobs.note, also on "Cut a draft"),

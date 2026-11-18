@@ -29,7 +29,8 @@ from .analysis import AnalysisWorker
 from .executor import LocalExecutor, RunnerClient, RunnerError
 from .jobs import JobError, Jobs
 from .notify import Notifier
-from . import memory, overview, pages
+from .telegram import Telegram, TelegramError
+from . import egress, memory, overview, pages
 from .review import Reviews
 from .auth import BasicAuthMiddleware
 from .db import Database
@@ -100,8 +101,12 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     projects = Projects(cfg, db)
     executor = RunnerClient(cfg.runner_socket) if cfg.executor == "runner" else LocalExecutor(cfg)
     worker = AnalysisWorker(cfg, db, projects, executor=executor if cfg.executor == "runner" else None)
-    jobs = Jobs(cfg, db, projects, executor, Notifier(cfg),
+    telegram = Telegram(cfg)
+    notifier = Notifier(cfg, telegram)
+    worker.notifier = notifier
+    jobs = Jobs(cfg, db, projects, executor, notifier,
                 ready=lambda pid: overview.ready(projects, worker, pid))
+    telegram.on_answer = lambda pid, domain, allow: jobs.answer_egress(pid, domain, allow)
     reviews = Reviews(cfg, db, projects)
     claude_cache = {"t": 0.0, "info": None}
 
@@ -244,6 +249,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
                 return JSONResponse({"error": str(e)}, status_code=422)
             lang = lang_of(request)
             briefing_mod.save(paths, data, lambda key, **v: i18n.translate(lang, key, **v), p["name"])
+            egress.record(db, p["id"], "briefing", "\n".join(str(v) for v in data.values()), replace=True)
             return JSONResponse({"ok": True})
         return JSONResponse(briefing_mod.load(paths))
 
@@ -265,10 +271,47 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         """The user's preferences for all projects (given to every job)."""
         if request.method == "PUT":
             try:
-                await anyio.to_thread.run_sync(memory.write_preferences, cfg, (await read_json(request)).get("text"))
+                text = (await read_json(request)).get("text")
+                await anyio.to_thread.run_sync(memory.write_preferences, cfg, text)
+                egress.record(db, egress.ALL, "preferences", text, replace=True)
             except ValueError as e:
                 return JSONResponse({"error": str(e)}, status_code=422)
         return JSONResponse({"text": memory.read_preferences(cfg)})
+
+    async def api_egress(request):
+        """Domains the project's agent may reach besides the fixed list, its questions, and the user's answers."""
+        p = project_or_404(request.path_params["pid"])
+        if request.method == "POST":
+            data = await read_json(request)
+            domain = str(data.get("domain") or "").lower()
+            if egress.registrable(domain) != domain:
+                return JSONResponse({"error": "not a domain"}, status_code=422)
+            await anyio.to_thread.run_sync(jobs.answer_egress, p["id"], domain, bool(data.get("allow")))
+        return JSONResponse(egress.overview(db, p["id"]))
+
+    async def api_telegram(request):
+        """Settings: the bot token (POST token / DELETE), the link of the user's account (POST link / unlink), a
+        test message (POST test)."""
+        try:
+            if request.method == "DELETE":
+                telegram.clear()
+            elif request.method == "POST":
+                data = await read_json(request)
+                action = data.get("action")
+                if action == "token":
+                    await anyio.to_thread.run_sync(telegram.set_token, str(data.get("token") or ""))
+                elif action == "link":
+                    url = await anyio.to_thread.run_sync(telegram.link_code, lang_of(request))
+                    return JSONResponse({**telegram.status(), "link": url})
+                elif action == "unlink":
+                    telegram.unlink()
+                elif action == "test":
+                    await anyio.to_thread.run_sync(telegram.test)
+                else:
+                    return JSONResponse({"error": "unknown action"}, status_code=400)
+        except TelegramError as e:
+            return JSONResponse({"error": str(e), **telegram.status()}, status_code=400)
+        return JSONResponse(telegram.status())
 
     def job_json(j):
         return {k: j[k] for k in ("id", "kind", "cut", "state", "model", "attempt", "reason", "message", "resume_after",
@@ -523,6 +566,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         async with anyio.create_task_group() as tg:
             tg.start_soon(housekeeping)
             await anyio.to_thread.run_sync(jobs.start)
+            telegram.start()
             n = await anyio.to_thread.run_sync(worker.resume)
             if n:
                 log.info("analysis resumes for %d projects", n)
@@ -530,6 +574,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
             tg.cancel_scope.cancel()
             await anyio.to_thread.run_sync(worker.close)
             await anyio.to_thread.run_sync(jobs.close)
+            telegram.close()
 
     routes = [
         Route("/", home),
@@ -550,6 +595,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/projects/{pid}/briefing", api_briefing, methods=["GET", "PUT"]),
         Route("/api/projects/{pid}/memory", api_memory, methods=["GET", "PUT"]),
         Route("/api/preferences", api_preferences, methods=["GET", "PUT"]),
+        Route("/api/projects/{pid}/egress", api_egress, methods=["GET", "POST"]),
+        Route("/api/telegram", api_telegram, methods=["GET", "POST", "DELETE"]),
         Route("/api/projects/{pid}/jobs", api_jobs, methods=["GET", "POST"]),
         Route("/api/jobs/{jid}/events", api_job_events),
         Route("/api/jobs/{jid}/raw", api_job_raw),
@@ -573,5 +620,5 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan,
                     exception_handlers={HTTPException: http_error, Exception: server_error})
     app.state.cfg, app.state.db, app.state.projects, app.state.tus, app.state.worker = cfg, db, projects, tus, worker
-    app.state.jobs, app.state.reviews = jobs, reviews
+    app.state.jobs, app.state.reviews, app.state.telegram = jobs, reviews, telegram
     return app

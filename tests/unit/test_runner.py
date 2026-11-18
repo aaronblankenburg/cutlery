@@ -26,6 +26,10 @@ class FakeDocker:
         self.calls.append((method, url, body))
         if url.startswith("/containers/create"):
             return {"Id": "c0ffee"}
+        if url == "/containers/c0ffee/json":
+            return {"NetworkSettings": {"Networks": {"cutlery-jobs": {"IPAddress": "172.30.0.5"}}}}
+        if url.startswith("/containers/cutlery-job-") and url.endswith("/json"):
+            return {"State": {"Running": False, "ExitCode": 0}}
         return {}
 
 
@@ -70,7 +74,7 @@ def test_the_container_sees_only_its_project_and_no_network(runner):
     {"stdout": "/work/projects/other/x"}, {"stdout": f"{WORK}/jobs/{JOB}/../../../../etc/passwd"},
     {"env": {"LD_PRELOAD": "/x"}}, {"env": {"HOME": "/root"}}, {"env": {"TMPDIR": "/work/projects/other/tmp"}},
     {"argv": ["sh", "-c", "id"]}, {"argv": ["claude", "--dangerously-skip-permissions"]}, {"argv": ["claude", "--bare"]},
-    {"argv": "claude"},
+    {"argv": "claude"}, {"allow": ["*"]}, {"allow": ["evil.com:22"]}, {"allow": "evil.com"}, {"allow": ["10.0.0.1"]},
 ])
 def test_requests_from_the_web_app_are_checked(runner, bad):
     with pytest.raises(ValueError):
@@ -91,7 +95,7 @@ def test_start_state_and_stop(runner):
         {"Id": "c0ffee"} if u.startswith("/containers/create") else
         {"State": {"Running": True}} if m == "GET" else {})
     runner.start(spec())
-    assert runner.state(JOB) == {"running": True}
+    assert runner.state(JOB)["running"] is True
 
 
 def test_refuses_to_start_without_mounts_or_with_two_credentials(cfg, monkeypatch):
@@ -241,3 +245,21 @@ def test_vision_models_are_fetched_by_the_runner_for_the_job_user(runner, tmp_pa
     have = runner.fetch_vision_models(str(folder))
     assert fetched == list(image_analysis.MODELS) and len(have) == 3
     assert runner.vision_done.is_set()
+
+
+def test_hosts_the_user_named_are_reachable_for_that_job_only(runner):
+    runner.start(spec(allow=["example.org", "*.example.org"]))
+    proxy = EgressProxy(("127.0.0.1", 0), runner.allow, runner.extra)
+    try:
+        assert proxy.allows("tile.example.org", "172.30.0.5") and proxy.allows("example.org", "172.30.0.5")
+        assert not proxy.allows("tile.example.org", "172.30.0.6")          # another container
+        assert proxy.allows("api.anthropic.com", "172.30.0.6")
+        runner.state(JOB)                                                       # the job ended
+        assert not proxy.allows("tile.example.org", "172.30.0.5")
+    finally:
+        proxy.server_close()
+
+
+def test_an_analysis_gets_no_extra_hosts(runner):
+    s = runner.check_spec(spec(argv=["cutter", "analyze"], kind="analysis", allow=["example.org"]))
+    assert s["allow"] == []

@@ -62,6 +62,7 @@ class Projects:
         uploads = self.db.all("SELECT id FROM uploads WHERE project_id=?", (project_id,))
         with self.db.tx() as con:
             con.execute("DELETE FROM projects WHERE id=?", (project_id,))
+            con.execute("DELETE FROM egress_domains WHERE project_id=?", (project_id,))
         for u in uploads:
             (self.cfg.work_dir / "uploads" / u["id"]).unlink(missing_ok=True)
         self.paths(project_id).remove()

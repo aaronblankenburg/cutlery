@@ -21,7 +21,7 @@ import threading
 
 from cutter.review_app import server as rs
 
-from . import cutter_project
+from . import cutter_project, egress
 from .db import now
 
 MEDIA = {".mp4", ".jpg", ".png", ".vtt", ".json"}
@@ -113,6 +113,10 @@ class Reviews:
                 return refused
             if method in ("POST", "PATCH") and (path == "/api/entries" or path.startswith("/api/entries/")):
                 body = self._with_person(body, user, method)
+                try:
+                    egress.record(self.db, project_id, "comment", str(json.loads(body).get("text") or ""))
+                except (ValueError, AttributeError):
+                    pass
             if method == "DELETE":
                 from urllib.parse import quote
                 query = f"person={quote(user)}"

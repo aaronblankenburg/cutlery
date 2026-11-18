@@ -28,6 +28,7 @@ class AnalysisWorker:
                  command: list[str] | None = None, executor=None):
         self.cfg, self.db, self.projects = cfg, db, projects
         self.executor = executor
+        self.notifier = None                      # set by the app: "analysis done" (notify.py)
         self.settle = cfg.analysis_settle_s if settle is None else settle
         self.command = command or [cfg.cutter_bin, "analyze", *cfg.analysis_args]
         self.slots = threading.Semaphore(parallel or cfg.analysis_parallel)
@@ -224,6 +225,11 @@ class AnalysisWorker:
         if code == 0:
             self._state(project_id, "idle")
             log.info("project %s: analysis done in %.0f s", project_id, time.monotonic() - started)
+            if self.notifier and not self.pending(project_id):
+                try:
+                    self.notifier.analysis_done(project, len(cutter_project.clips_json(paths)))
+                except Exception as e:
+                    log.warning("project %s: notification failed: %s", project_id, e)
         else:
             tail = _tail(logfile)
             self._state(project_id, "failed", tail)
