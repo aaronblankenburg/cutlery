@@ -29,6 +29,9 @@ class TestStream:
             {"type": "text", "text": "Reading the transcripts."},
             {"type": "tool_use", "name": "Bash", "input": {"command": "cutter analyze --json"}}]}}))
         assert [(e["kind"], e["text"]) for e in ev] == [("text", "Reading the transcripts."), ("tool", "cutter analyze --json")]
+        md = "cut2 is ready.\r\n\n\n\n| Part | Length |  \n|---|---|\n| Intro | 0:24 |\n\n- **Maps:** larger"
+        [ev] = stream.parse_line(json.dumps({"type": "result", "subtype": "success", "result": md}))
+        assert ev["text"] == "cut2 is ready.\n\n| Part | Length |\n|---|---|\n| Intro | 0:24 |\n\n- **Maps:** larger"
         assert stream.parse_line('{"type":"user","message":{}}') == []
         assert stream.parse_line("not json")[0]["kind"] == "error"
 

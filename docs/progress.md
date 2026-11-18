@@ -134,6 +134,11 @@ milestone (and before any model switch), so a fresh session can continue without
   height on a narrow one (review.js sizes the frame). cutter 0.5.1 also finds an alternatives place by its "clip"
   when shot numbers moved (cut2 of the user's Namibia project had both places on a stale shot 128), shows places
   at the same time together, and has a "⇄ Alternatives: n" jump button.
+- 0.2.2 (2026-11-18, cutter 0.5.2): export packages failed with KeyError 'rel_path' when a cut uses external clips
+  (map animations, black; edit.json "external_clips"); cutter now puts them into the package under maps/. Merging
+  people is a mode: "Merge people" shows the boxes and a bar with "Merge these n" (enabled from two) and "Cancel".
+  Claude's messages keep their line breaks (stream.lines) and are shown as Markdown in the job log (static/js/md.js:
+  paragraphs, lists, tables, code, bold, links; DOM only, no innerHTML). Older logs were rebuilt from attempt-*.jsonl.
 
 ## Open questions
 

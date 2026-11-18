@@ -4,11 +4,12 @@ import { load, t } from './i18n.js';
 // "cut3" -> "Cut 3" / "Fassung 3"
 const cutName = (id) => t('cuts.name', { n: (String(id).match(/\d+/g) || [id]).pop() });
 import { duration as fmtDuration } from './format.js';
+import { markdown } from './md.js';
 
 const lang = document.documentElement.lang || 'en';
 const $ = (id) => document.getElementById(id);
 const project = $('jobs').dataset.project;
-let source = null, shown = 0, current = null;
+let source = null, shown = 0, current = null, lastResult = null;
 
 await load();
 
@@ -63,9 +64,18 @@ function logLine(ev) {
   const tag = document.createElement('span');
   tag.className = 'tag';
   tag.textContent = name;
-  const msg = document.createElement('span');
-  msg.className = 'msg';
-  msg.textContent = text(ev);
+  let msg;
+  if (ev.kind === 'done' && ev.text && ev.text === lastResult) {
+    msg = document.createElement('span');                 // the same words as the result just above
+    msg.textContent = t('jobs.state.done');
+  } else if (['text', 'result', 'done'].includes(ev.kind)) {
+    msg = markdown(text(ev));                             // Claude's own words, in Markdown
+  } else {
+    msg = document.createElement('span');
+    msg.textContent = text(ev);
+  }
+  if (ev.kind === 'result') lastResult = ev.text;
+  msg.classList.add('msg');
   row.append(tm, tag, msg);
   const log = $('job-log');
   const atEnd = log.scrollTop + log.clientHeight >= log.scrollHeight - 30;
@@ -144,25 +154,28 @@ $('job-cancel').addEventListener('click', async () => {
 });
 
 // ------------------------------------------------------------------ people
-// Names are saved when a field is left. Merging: tick two or more people (box or face), a bar offers "Merge", a
-// dialog shows their faces side by side and asks for the name. Typing a name another person already has offers the
-// same dialog for the two.
+// Names are saved when a field is left. Merging: "Merge people" shows a box on every person and a bar; ticking two or
+// more (box or face) enables "Merge these n", which opens a dialog with their faces and the name to keep. Typing a
+// name another person already has opens the same dialog for the two.
 
 const picks = () => [...document.querySelectorAll('[data-pick]:checked')].map((b) => b.dataset.pick);
 
 function showPicks() {
   const ids = picks();
   for (const row of document.querySelectorAll('[data-row]')) row.classList.toggle('picked', ids.includes(row.dataset.row));
-  const bar = $('merge-bar');
-  if (!bar) return;
-  bar.hidden = ids.length < 2;
-  $('merge-count').textContent = t('people.selected', { n: ids.length });
+  if (!$('merge-open')) return;
+  $('merge-open').disabled = ids.length < 2;
+  $('merge-open').textContent = t('people.merge_n', { n: Math.max(2, ids.length) });
+}
+function mergeMode(on) {
+  $('people').classList.toggle('merging', on);
+  $('merge-bar').hidden = !on;
+  if (!on) for (const box of document.querySelectorAll('[data-pick]')) box.checked = false;
+  showPicks();
 }
 for (const box of document.querySelectorAll('[data-pick]')) box.addEventListener('change', showPicks);
-$('merge-clear')?.addEventListener('click', () => {
-  for (const box of document.querySelectorAll('[data-pick]')) box.checked = false;
-  showPicks();
-});
+$('merge-mode')?.addEventListener('click', () => mergeMode(true));
+$('merge-cancel')?.addEventListener('click', () => mergeMode(false));
 
 let merging = null;   // {ids, undo}
 async function openMerge(ids, name, undo = null) {

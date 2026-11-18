@@ -23,13 +23,16 @@ def test_merge_by_ticking_and_by_name(page, server):
         {"id": "P3", "name": "Ben", "seconds": 5, "clips": {"C003": []}, "pictures": []},
         {"id": "P4", "name": "", "seconds": 2, "clips": {"C004": []}, "pictures": []}])
     page.goto(f"{server['url']}/projects/{pid}")
-    assert page.is_hidden("#merge-bar")
+    assert page.is_hidden("#merge-bar") and page.is_hidden("#pick-P1")        # no boxes until asked for
 
-    # tick two: the bar appears; the dialog keeps the one seen longest and its name
-    page.check("#pick-P1")
-    assert page.is_hidden("#merge-bar")
-    page.check("#pick-P2")
-    assert page.is_visible("#merge-bar")
+    # "Merge people": boxes and the bar; two faces enable "Merge these 2"; the dialog keeps the one seen longest
+    page.click("#merge-mode")
+    assert page.is_visible("#merge-bar") and page.is_visible("#pick-P1")
+    assert page.is_disabled("#merge-open")
+    page.click("[data-row=P1] .face")
+    assert page.is_disabled("#merge-open")
+    page.click("[data-row=P2] .face")
+    assert page.is_enabled("#merge-open")
     page.click("#merge-open")
     page.wait_for_selector("#merge-dialog[open]")
     assert page.input_value("#merge-name") == "Anna"

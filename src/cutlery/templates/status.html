@@ -66,11 +66,11 @@
       <div class="row between"><h2>{{ t('people.title') }}</h2><span class="pill">{{ t('people.private') }}</span></div>
       <p class="small muted">{{ t('people.lead') }}</p>
       {% if people %}
-      {% if people|length > 1 %}<p class="small muted">{{ t('people.merge_hint') }}</p>{% endif %}
+      {% if people|length > 1 %}<button class="button small-button" type="button" id="merge-mode">{{ t('people.merge_mode') }}</button>{% endif %}
       <div class="people">
         {% for p in people %}
         <div class="person" data-row="{{ p.id }}" data-seconds="{{ p.seconds }}">
-          {% if people|length > 1 %}<input type="checkbox" class="person-pick" id="pick-{{ p.id }}" data-pick="{{ p.id }}" aria-label="{{ t('people.pick', id=p.id) }}">{% else %}<span></span>{% endif %}
+          {% if people|length > 1 %}<input type="checkbox" class="person-pick" id="pick-{{ p.id }}" data-pick="{{ p.id }}" aria-label="{{ t('people.pick', id=p.id) }}">{% endif %}
           <label class="face" {% if people|length > 1 %}for="pick-{{ p.id }}"{% endif %}>{% if p.pictures %}<img src="/projects/{{ project.id }}/analysis/faces/{{ p.pictures[0] }}" alt="" width="40" height="40" loading="lazy">{% else %}<span class="face-empty"></span>{% endif %}</label>
           <span class="mono small">{{ p.id }}</span>
           <label class="visually-hidden" for="person-{{ p.id }}">{{ t('people.name_for', id=p.id) }}</label>
@@ -80,9 +80,9 @@
         {% endfor %}
       </div>
       <div class="merge-bar" id="merge-bar" hidden>
-        <span id="merge-count"></span>
-        <button class="button primary" type="button" id="merge-open">{{ t('people.merge') }}</button>
-        <button class="button" type="button" id="merge-clear">{{ t('people.merge_clear') }}</button>
+        <span class="small" id="merge-help">{{ t('people.merge_help') }}</span>
+        <button class="button primary" type="button" id="merge-open" disabled>{{ t('people.merge_n', n=2) }}</button>
+        <button class="button" type="button" id="merge-cancel">{{ t('people.merge_cancel') }}</button>
       </div>
       <p class="small" id="people-status" aria-live="polite"></p>
       <dialog class="dialog" id="merge-dialog" aria-labelledby="merge-title">

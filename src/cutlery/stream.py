@@ -22,6 +22,18 @@ def short(text, limit=300):
     return text if len(text) <= limit else text[:limit - 1] + "…"
 
 
+def lines(text, limit=8000):
+    """Claude's own words (Markdown): line breaks kept, trailing spaces and runs of blank lines removed."""
+    out, blank = [], 0
+    for line in str(text or "").replace("\r\n", "\n").split("\n"):
+        line = line.rstrip()
+        blank = blank + 1 if not line else 0
+        if blank < 2:
+            out.append(line)
+    text = "\n".join(out).strip()
+    return text if len(text) <= limit else text[:limit - 1] + "…"
+
+
 def _tool_text(name, inp):
     inp = inp or {}
     if name == "Bash":
@@ -49,12 +61,12 @@ def parse_line(line: str) -> list[dict]:
                 out.append({"kind": "tool", "tool": part.get("name"),
                             "text": _tool_text(part.get("name"), part.get("input"))})
             elif part.get("type") == "text" and part.get("text", "").strip():
-                out.append({"kind": "text", "text": short(part["text"], 600)})
+                out.append({"kind": "text", "text": lines(part["text"], 3000)})
             elif part.get("type") == "thinking" and part.get("thinking", "").strip():
                 out.append({"kind": "think", "text": short(part["thinking"], 300)})
         return out
     if t == "result":
-        return [{"kind": "result", "text": short(msg.get("result"), 1000), "subtype": msg.get("subtype"),
+        return [{"kind": "result", "text": lines(msg.get("result")), "subtype": msg.get("subtype"),
                  "is_error": bool(msg.get("is_error")), "cost_usd": msg.get("total_cost_usd"),
                  "turns": msg.get("num_turns"), "session_id": msg.get("session_id")}]
     return []
