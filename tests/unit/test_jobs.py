@@ -132,6 +132,7 @@ def test_draft_runs_to_done(env, tmp_path, monkeypatch):
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
     assert "Bash" in argv and "--dangerously-skip-permissions" not in argv
     assert str(paths.work) in argv[argv.index("-p") + 1]             # the prompt says where the analysis is
+    assert "selects.json" not in argv[argv.index("-p") + 1]          # no selection: not mentioned
     assert argv[argv.index("--output-format") + 1] == "stream-json" and "--verbose" in argv
     assert argv[argv.index("--model") + 1] == "claude-opus-5-5"
     assert argv[argv.index("-p") + 1].startswith("/video-editing ")
@@ -413,6 +414,8 @@ def test_notes_preferences_and_project_memory_reach_the_prompt(env, tmp_path, mo
     monkeypatch.setenv("FAKE_CLAUDE_LOG", str(calls))
     memory.write_preferences(env.cfg, "Calm cutting, no fast montages.")
     pid = env.project()
+    (env.projects.paths(pid).data / "selects.json").write_text(
+        '{"version": 1, "selects": [{"id": "s1", "clip": "C001", "kind": "favorite"}]}')
     with pytest.raises(JobError):
         env.jobs.create(pid, "draft", "x" * (memory.MAX_NOTE + 1))
     j = env.jobs.create(pid, "draft", "  More of the desert.\r\n")
@@ -422,6 +425,7 @@ def test_notes_preferences_and_project_memory_reach_the_prompt(env, tmp_path, mo
     prompt = prompt[prompt.index("-p") + 1]
     assert "Calm cutting, no fast montages." in prompt and "More of the desert." in prompt
     assert "CLAUDE.md" in prompt                                    # keep the project memory up to date
+    assert "selects.json" in prompt                                 # the user's selection from the material page
     paths = env.projects.paths(pid)
     assert memory.read_memory(paths).startswith("# Project memory")   # started before the first job
 

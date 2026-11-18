@@ -163,6 +163,34 @@ milestone (and before any model switch), so a fresh session can continue without
   cut2 (89 of 138 shots corrected, dusk/night/fire left alone). Measuring takes about 2 s per clip once
   (analysis/color.json in the DATA project folder). Not done yet from the plan: looks for the whole film (LUTs,
   presets), the Cutlery briefing option, the analysis view with before/after.
+- Material page (branch `material`, not merged yet, 2026-11-19): /projects/<id>/material, tab "Material". The
+  footage by day (sticky day headers, day chips), sorted by recording time; tiles with the middle picture of the film
+  strip, hover scrub (a muted video follows the pointer), quality bar (usable/steady/flaws), badges (words, people,
+  used in the latest cut, marks); size slider; list view. Filters: search in names and transcripts, camera
+  (material.camera(): device, else file-name prefix + short side), person, used/unused in the latest cut, marks,
+  speech. Source monitor (dialog): 360p copy, J/K/L, frames, I/O, transcript with words (click jumps, current word
+  highlighted, unsure parts in italics), where the clip is used (links to the review), marks: F favourite, X reject,
+  for the In/Out range or the whole clip, with a note. Marks go to DATA/projects/<id>/selects.json (format in cutter
+  docs/formats.md "selects.json", cutter branch `selects`), into briefing.md ("My selection from the footage") and,
+  when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
+
+## Planned: vertical films (Instagram Reels), asked for 2026-11-19
+
+The user wants to cut Reels too: 9:16 must be supported like 16:9. Today the sequence is fixed at 1920×1080 in
+cutter (timeline.FRAME_W/H, FCP7/FCPXML/FilmCraft sequence, titles, map intro, review renders) and Cutlery's review
+layout assumes a wide video. Stand-ins are already upright with the long side 640 (portrait 360×640).
+Plan (to be approved):
+1. cutter: a cut's frame in edit.json (`"frame": "16:9" | "9:16" | "1:1" | "4:5"`, default 16:9) through timeline,
+   exports (FCP7, FCPXML, FilmCraft sequence size), review render and review-data; portrait clips fill a 9:16 frame,
+   landscape clips are cropped to the centre first.
+2. cutter: reframing landscape clips for 9:16 from the image analysis (faces/people boxes per second; else the
+   centre), as position keyframes (FilmCraft motion, FCP7/FCPXML basic motion); titles, subtitles, credits and safe
+   areas for the Reels UI (nothing important in the top ~14 % and bottom ~20 %); a vertical map intro.
+3. cutter skill: Reels guidance (hook in the first 2 s, 15–90 s, cuts on the beat, big burned-in captions), an
+   export preset 1080×1920 H.264; a reel can be cut from the footage or derived from a film's cut.
+4. Cutlery: format choice in the briefing (film, reel, both), per cut; review page for tall video (player beside the
+   comments), export page.
+Open question for the user: one project with a film and reels from the same footage (likely), or separate projects.
 
 ## Open questions
 

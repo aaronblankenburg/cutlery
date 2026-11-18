@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from . import briefing, cutter_project, eta, files, i18n, overview, review
+from . import briefing, cutter_project, eta, files, i18n, material, overview, review
 from .jobs import JobError
 from .projects import NotFound
 
@@ -98,6 +98,60 @@ def routes(c: Context):
             pass
         overview_pages = sorted(f.name for f in (a / "overview").glob("*.jpg")) if (a / "overview").is_dir() else []
         return c.page(request, "analysis.html", project=p, clips=rows, quality=quality, overview_pages=overview_pages)
+
+    async def material_page(request):
+        p = c.project_or_404(request.path_params["pid"])
+        return c.page(request, "material.html", project=p)
+
+    async def known_clips(p):
+        return {x["rel_path"] for x in await anyio.to_thread.run_sync(projects.clips, p["id"])}
+
+    async def api_material(request):
+        p = c.project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        return JSONResponse(await anyio.to_thread.run_sync(material.footage, paths, await known_clips(p)))
+
+    async def api_material_transcript(request):
+        p = c.project_or_404(request.path_params["pid"])
+        return JSONResponse(await anyio.to_thread.run_sync(material.transcript, projects.paths(p["id"]),
+                                                           request.path_params["cid"]))
+
+    async def selectable(p):
+        known = await known_clips(p)
+        clips = await anyio.to_thread.run_sync(cutter_project.clips_json, projects.paths(p["id"]))
+        return {x["id"]: x for x in clips if x.get("rel_path") in known}
+
+    async def api_selects(request):
+        p = c.project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        if request.method == "POST":
+            body = await c.read_json(request)
+            try:
+                s = await anyio.to_thread.run_sync(material.add, paths, body, await selectable(p))
+            except material.SelectError as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+            await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
+            return JSONResponse(s, status_code=201)
+        return JSONResponse(await anyio.to_thread.run_sync(material.load, paths))
+
+    async def api_select(request):
+        p = c.project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        sid = request.path_params["sid"]
+        if request.method == "DELETE":
+            ok = await anyio.to_thread.run_sync(material.remove, paths, sid)
+            result = {"deleted": sid}
+        else:
+            body = await c.read_json(request)
+            try:
+                result = await anyio.to_thread.run_sync(material.change, paths, sid, body, await selectable(p))
+            except material.SelectError as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+            ok = result is not None
+        if not ok:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
+        return JSONResponse(result)
 
     async def analysis_file(request):
         p = c.project_or_404(request.path_params["pid"])
@@ -313,6 +367,11 @@ def routes(c: Context):
         Route("/projects/{pid}/footage", footage_redirect),
         Route("/projects/{pid}/review", review_page),
         Route("/projects/{pid}/analysis", analysis_page),
+        Route("/projects/{pid}/material", material_page),
+        Route("/api/projects/{pid}/material", api_material),
+        Route("/api/projects/{pid}/material/{cid}/transcript", api_material_transcript),
+        Route("/api/projects/{pid}/selects", api_selects, methods=["GET", "POST"]),
+        Route("/api/projects/{pid}/selects/{sid}", api_select, methods=["PATCH", "DELETE"]),
         Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),
         Route("/projects/{pid}/analysis/{kind}/{name}", analysis_file),
         Route("/projects/{pid}/thumb/{n:int}", thumb),

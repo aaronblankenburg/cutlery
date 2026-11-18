@@ -53,10 +53,10 @@ def refresh(paths: ProjectPaths, t, project_name: str) -> None:
 
     data = load(paths)
     if data:
-        write_atomic(paths.data / "briefing.md", render(data, t, project_name, files.listing(paths)).encode())
+        write_atomic(paths.data / "briefing.md", render(data, t, project_name, files.listing(paths), paths).encode())
 
 
-def render(data: dict, t, project_name: str, files: dict | None = None) -> str:
+def render(data: dict, t, project_name: str, files: dict | None = None, paths: ProjectPaths | None = None) -> str:
     lines = [f"# {t('briefing.md.title', name=project_name)}", "", t("briefing.md.note"), ""]
     for key in FIELDS:
         value = data.get(key)
@@ -79,6 +79,9 @@ def render(data: dict, t, project_name: str, files: dict | None = None) -> str:
             use = t("briefing.md.music_use") if lic != "other" else t("briefing.md.music_skip")
             lines.append(f"- music/{f['name']}: {t('files.license.' + lic.replace(' ', '_').lower())} – {use}")
         lines.append("")
+    if paths is not None:
+        from . import material
+        lines += material.briefing_lines(paths, t)
     missing = [t("briefing." + k) for k in FIELDS if not data.get(k)]
     if missing:
         lines += [f"## {t('briefing.md.missing')}", "", ", ".join(missing), ""]

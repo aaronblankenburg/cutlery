@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% set tab = 'material' %}
+{% block title %}{{ t('material.title') }} – {{ project.name }}{% endblock %}
+{% block main %}
+{% include "_project_nav.html" %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('material.title') }}</h1>
+    <p>{{ t('material.lead') }}</p>
+  </div>
+  <div class="actions"><a class="button" href="/projects/{{ project.id }}/analysis">{{ t('material.details') }}</a></div>
+</div>
+
+<div id="material" data-project="{{ project.id }}">
+  <div class="material-bar" id="material-bar" hidden>
+    <div class="material-filters">
+      <label class="visually-hidden" for="m-search">{{ t('material.search') }}</label>
+      <input type="search" id="m-search" placeholder="{{ t('material.search') }}" autocomplete="off">
+      <label class="visually-hidden" for="m-camera">{{ t('material.camera') }}</label>
+      <select id="m-camera"><option value="">{{ t('material.all_cameras') }}</option></select>
+      <label class="visually-hidden" for="m-person">{{ t('material.person') }}</label>
+      <select id="m-person"><option value="">{{ t('material.all_people') }}</option></select>
+      <label class="visually-hidden" for="m-used">{{ t('material.used') }}</label>
+      <select id="m-used">
+        <option value="">{{ t('material.used_any') }}</option>
+        <option value="used">{{ t('material.used_yes') }}</option>
+        <option value="unused">{{ t('material.used_no') }}</option>
+      </select>
+      <label class="visually-hidden" for="m-mark">{{ t('material.mark') }}</label>
+      <select id="m-mark">
+        <option value="">{{ t('material.mark_any') }}</option>
+        <option value="favorite">{{ t('material.mark_favorite') }}</option>
+        <option value="reject">{{ t('material.mark_reject') }}</option>
+        <option value="none">{{ t('material.mark_none') }}</option>
+      </select>
+      <label class="check"><input type="checkbox" id="m-speech"> {{ t('material.speech_only') }}</label>
+    </div>
+    <div class="material-view">
+      <span class="small muted" id="m-count"></span>
+      <label class="small muted" for="m-size">{{ t('material.size') }}</label>
+      <input type="range" id="m-size" min="140" max="360" step="20" value="220">
+      <span class="segmented-buttons" role="group" aria-label="{{ t('material.view') }}">
+        <button type="button" id="m-grid" aria-pressed="true">{{ t('material.view_grid') }}</button>
+        <button type="button" id="m-list" aria-pressed="false">{{ t('material.view_list') }}</button>
+      </span>
+    </div>
+    <nav class="day-chips" id="m-days" aria-label="{{ t('material.days') }}"></nav>
+  </div>
+  <p class="muted" id="m-loading">{{ t('material.loading') }}</p>
+  <div class="empty" id="m-empty" hidden>{{ t('material.none') }}</div>
+  <div id="m-body"></div>
+</div>
+
+<dialog class="monitor" id="monitor" aria-labelledby="mon-title">
+  <div class="monitor-main">
+    <div class="monitor-video"><video id="mon-video" playsinline preload="auto"></video></div>
+    <div class="monitor-track" id="mon-track" title="{{ t('material.track_title') }}">
+      <div class="mon-layer" id="mon-quality"></div>
+      <div class="mon-layer" id="mon-selects"></div>
+      <div class="mon-range" id="mon-range" hidden></div>
+      <div class="mon-head" id="mon-head"></div>
+    </div>
+    <div class="monitor-controls">
+      <button type="button" id="mon-prev" title="{{ t('material.prev_clip') }}">↑</button>
+      <button type="button" id="mon-play" title="{{ t('material.play') }}">▶</button>
+      <button type="button" id="mon-next" title="{{ t('material.next_clip') }}">↓</button>
+      <span class="mono small" id="mon-time">0:00.0</span>
+      <span class="small muted" id="mon-range-text"></span>
+      <span class="spacer"></span>
+      <button type="button" id="mon-in" title="{{ t('material.in_title') }}">{{ t('material.in') }}</button>
+      <button type="button" id="mon-out" title="{{ t('material.out_title') }}">{{ t('material.out') }}</button>
+    </div>
+    <div class="monitor-mark">
+      <button type="button" class="mark-fav" id="mon-fav">★ {{ t('material.favorite') }}</button>
+      <button type="button" class="mark-rej" id="mon-rej">⊘ {{ t('material.reject') }}</button>
+      <label class="visually-hidden" for="mon-note">{{ t('material.note') }}</label>
+      <input type="text" id="mon-note" maxlength="500" placeholder="{{ t('material.note_placeholder') }}">
+    </div>
+    <p class="small muted" id="mon-keys">{{ t('material.keys') }}</p>
+  </div>
+  <aside class="monitor-side">
+    <div class="monitor-head">
+      <h2 id="mon-title" class="mono"></h2>
+      <button type="button" class="close" id="mon-close" aria-label="{{ t('material.close') }}">×</button>
+    </div>
+    <p class="small" id="mon-meta"></p>
+    <ul class="mon-list" id="mon-used"></ul>
+    <ul class="mon-list" id="mon-marks"></ul>
+    <h3 class="small">{{ t('material.transcript') }}</h3>
+    <div class="mon-transcript" id="mon-transcript"></div>
+  </aside>
+</dialog>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/js/material.js"></script>{% endblock %}

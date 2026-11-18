@@ -52,6 +52,9 @@ PROMPTS = {
              "answer every comment of {previous} in the language of the comment, and finish with the timeline, the "
              "FilmCraft export and `cutter review-data {cut}`."),
 }
+SELECTS = (" The user viewed the footage and chose: selects.json (and the section about it in briefing.md) lists "
+           "favourites and rejects, for whole clips or ranges. Use the favourites where they fit the story, leave the "
+           "rejects out, and record in decisions.json where you did not follow the selection and why.")
 EGRESS = (" Internet access goes through an allowlist; a host it refuses (HTTP 403 \"Forbidden by Cutlery egress "
           "allowlist\") is shown to the user, who may allow it while you work: if you need it, go on with other steps "
           "and try again a few times over the next minutes (wait with sleep 60 between tries, at most 10 minutes); "
@@ -269,6 +272,8 @@ class Jobs:
         previous = cuts[-1] if cuts and j["kind"] == "next" else ""
         paths = self.projects.paths(j["project_id"])
         prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous) + WHERE.format(work=paths.work) + MEMORY + EGRESS
+        if (paths.data / "selects.json").is_file() and json.loads((paths.data / "selects.json").read_text() or "{}").get("selects"):
+            prompt += SELECTS
         if j["attempt"] > 1:
             prompt += RESUMED.format(attempt=j["attempt"])
         prefs = memory.read_preferences(self.cfg).strip()

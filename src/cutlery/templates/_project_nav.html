@@ -3,6 +3,7 @@
   <span class="tabs">
     <a href="/projects/{{ project.id }}/setup" {% if tab == 'setup' %}aria-current="page"{% endif %}>{{ t('project.nav.setup') }}</a>
     <a href="/projects/{{ project.id }}" {% if tab == 'status' %}aria-current="page"{% endif %}>{{ t('project.nav.status') }}</a>
+    <a href="/projects/{{ project.id }}/material" {% if tab == 'material' %}aria-current="page"{% endif %}>{{ t('project.nav.material') }}</a>
     <a href="/projects/{{ project.id }}/review" {% if tab == 'review' %}aria-current="page"{% endif %}>{{ t('project.nav.review') }}</a>
     <a href="/projects/{{ project.id }}/export" {% if tab == 'export' %}aria-current="page"{% endif %}>{{ t('project.nav.export') }}</a>
   </span>
