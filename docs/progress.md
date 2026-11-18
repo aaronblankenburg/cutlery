@@ -111,7 +111,7 @@ milestone (and before any model switch), so a fresh session can continue without
   other shell command (`cd …; ls`, python, ffmpeg), and the agent looked for the analysis in the data tree. Now the
   agent may use Bash (the job container is the boundary), the prompt names the work folder, and a session that ends
   without cuts/<cut>/edit.json is `failed` (reason no_cut) with Claude's last message.
-- 0.2.0 (2026-11-18, needs cutter 0.5.0, branch `cutlery-review` there): the review page is cutter's own review app
+- 0.2.0 (2026-11-18, needs cutter 0.5.0): OpenTopoMap tile hosts added to the egress allowlist (the agent could not fetch map tiles); the review page is cutter's own review app
   (served unchanged from the cutter package in a full-width frame, Cutlery's stylesheet added; the host's settings
   person/submit/embedded/ui_language go into the `app` object of /api/cuts) with Cutlery's bar above it ("review
   done → next cut" opens a dialog with notes for the next cut). Notes for a cut (jobs.note, also on "Cut a draft"),

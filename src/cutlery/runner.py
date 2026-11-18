@@ -43,6 +43,8 @@ DEFAULT_ALLOW = ("api.anthropic.com",
                  "jamendo.com", "*.jamendo.com",
                  # map outlines (Natural Earth via world-atlas)
                  "cdn.jsdelivr.net", "unpkg.com", "naturalearthdata.com", "*.naturalearthdata.com",
+                 # map tiles for route maps (OpenTopoMap: CC-BY-SA, light use allowed)
+                 "opentopomap.org", "*.opentopomap.org",
                  # models for the analysis (Whisper, detection), downloaded once into the models folder
                  "huggingface.co", "*.huggingface.co", "*.hf.co")
 ENV_KEYS = ("CUTTER_PROJECT", "TMPDIR", "CLAUDE_CONFIG_DIR", "HOME")
