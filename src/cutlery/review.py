@@ -1,4 +1,4 @@
-"""The review of a project: cutter's review-app API and storage, behind Cutlery's login, with a lock per cut.
+"""The review of a project: cutter's review app (frontend, API and storage), behind Cutlery's login, with a lock per cut.
 
 The API is cutter's own (cutter.review_app.server.Handler.api: /api/cuts, /api/entries, /api/status, /api/export)
 and so is the storage (feedback.sqlite in the data tree, the rendered cuts in the work tree). A small adapter calls
@@ -7,7 +7,10 @@ cutter's handler method with the request; nothing is copied. Cutlery adds:
 - the lock of a cut: "Review done → next cut" freezes its comments (the next cut answers them); writes to a locked
   cut are refused with 409;
 - the person of a comment is the logged-in user (one user per instance);
-- media (review.mp4 with range requests, thumbnails, poster) are served by Cutlery.
+- media (review.mp4 with range requests, thumbnails, poster, previews of alternatives) are served by Cutlery;
+- cutter's frontend (static/ of cutter.review_app) is served unchanged for a frame on the review page; the host's
+  settings (reviewer = the logged-in user, language, no "send the feedback" box, embedded layout) go into the `app`
+  object of /api/cuts, which the frontend reads.
 """
 from __future__ import annotations
 
@@ -22,6 +25,16 @@ from . import cutter_project
 from .db import now
 
 MEDIA = {".mp4", ".jpg", ".png", ".vtt", ".json"}
+APP_DIR = pathlib.Path(rs.STATIC_DIR)
+APP_TYPES = {".html", ".js", ".css", ".svg", ".png", ".woff2", ".json"}
+
+
+def app_file(name: str) -> pathlib.Path | None:
+    """A file of cutter's review frontend, or None."""
+    if not rs.FILE_RE.match(name) or pathlib.Path(name).suffix.lower() not in APP_TYPES:
+        return None
+    f = APP_DIR / name
+    return f if f.is_file() else None
 
 
 class _Server:
@@ -92,7 +105,7 @@ class Reviews:
 
     # ------------------------------------------------------------ API
 
-    def api(self, project_id, method, path, query: str, body: bytes, user: str):
+    def api(self, project_id, method, path, query: str, body: bytes, user: str, app: dict | None = None):
         srv = self.server(project_id)
         if method in ("POST", "PATCH", "DELETE"):
             refused = self._check_write(project_id, srv, method, path, body, user)
@@ -113,6 +126,8 @@ class Reviews:
             for c in d.get("cuts", []):
                 c["locked"] = c["id"] in locked
             d["login"] = user
+            if app:
+                d["app"] = {**(d.get("app") or {}), **app}
             data = json.dumps(d, ensure_ascii=False).encode()
         return status, ctype, data
 

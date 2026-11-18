@@ -111,6 +111,15 @@ milestone (and before any model switch), so a fresh session can continue without
   other shell command (`cd …; ls`, python, ffmpeg), and the agent looked for the analysis in the data tree. Now the
   agent may use Bash (the job container is the boundary), the prompt names the work folder, and a session that ends
   without cuts/<cut>/edit.json is `failed` (reason no_cut) with Claude's last message.
+- 0.2.0 (2026-11-18, needs cutter 0.5.0, branch `cutlery-review` there): the review page is cutter's own review app
+  (served unchanged from the cutter package in a full-width frame, Cutlery's stylesheet added; the host's settings
+  person/submit/embedded/ui_language go into the `app` object of /api/cuts) with Cutlery's bar above it ("review
+  done → next cut" opens a dialog with notes for the next cut). Notes for a cut (jobs.note, also on "Cut a draft"),
+  the project memory CLAUDE.md in the project folder (kept by the agent, editable on the status page) and the
+  user's preferences for all projects (DATA/preferences.md, settings page) go into the prompt. cutter.toml gets
+  `[filmcraft] export_height = 360`: renders at the stand-ins' size instead of 1080p → 720p. cutter 0.5.0 adds
+  general comments (t null), alternatives (cuts/<cut>/alternatives.json, previews alt-<id>-<n>.mp4, entry field
+  `alternative`) and the embedding keys.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions

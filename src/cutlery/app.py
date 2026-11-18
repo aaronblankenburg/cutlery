@@ -29,7 +29,7 @@ from .analysis import AnalysisWorker
 from .executor import LocalExecutor, RunnerClient, RunnerError
 from .jobs import JobError, Jobs
 from .notify import Notifier
-from . import overview, pages
+from . import memory, overview, pages
 from .review import Reviews
 from .auth import BasicAuthMiddleware
 from .db import Database
@@ -247,9 +247,32 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
             return JSONResponse({"ok": True})
         return JSONResponse(briefing_mod.load(paths))
 
+    async def api_memory(request):
+        """The project memory (CLAUDE.md in the project folder): read, or replaced by the user."""
+        p = project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        if request.method == "PUT":
+            if jobs.active(p["id"]) and jobs.active(p["id"])["state"] == "running":
+                return JSONResponse({"error": "a job is running", "message":
+                                     i18n.translate(lang_of(request), "memory.error.running")}, status_code=409)
+            try:
+                await anyio.to_thread.run_sync(memory.write_memory, paths, (await read_json(request)).get("text"))
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+        return JSONResponse({"text": memory.read_memory(paths)})
+
+    async def api_preferences(request):
+        """The user's preferences for all projects (given to every job)."""
+        if request.method == "PUT":
+            try:
+                await anyio.to_thread.run_sync(memory.write_preferences, cfg, (await read_json(request)).get("text"))
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+        return JSONResponse({"text": memory.read_preferences(cfg)})
+
     def job_json(j):
         return {k: j[k] for k in ("id", "kind", "cut", "state", "model", "attempt", "reason", "message", "resume_after",
-                                  "cost_usd", "turns", "created", "started", "ended")}
+                                  "cost_usd", "turns", "created", "started", "ended", "note")}
 
     def job_or_404(jid):
         try:
@@ -265,7 +288,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         if request.method == "POST":
             data = await read_json(request)
             try:
-                j = await anyio.to_thread.run_sync(jobs.create, p["id"], str(data.get("kind", "draft")))
+                j = await anyio.to_thread.run_sync(jobs.create, p["id"], str(data.get("kind", "draft")),
+                                                   str(data.get("note") or ""))
             except JobError as e:
                 return job_error(request, e)
             return JSONResponse(job_json(j), status_code=201)
@@ -524,6 +548,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/projects/{pid}/analysis/stop", api_analysis_stop, methods=["POST"]),
         Route("/api/projects/{pid}/manifest", api_manifest),
         Route("/api/projects/{pid}/briefing", api_briefing, methods=["GET", "PUT"]),
+        Route("/api/projects/{pid}/memory", api_memory, methods=["GET", "PUT"]),
+        Route("/api/preferences", api_preferences, methods=["GET", "PUT"]),
         Route("/api/projects/{pid}/jobs", api_jobs, methods=["GET", "POST"]),
         Route("/api/jobs/{jid}/events", api_job_events),
         Route("/api/jobs/{jid}/raw", api_job_raw),

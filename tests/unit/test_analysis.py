@@ -61,6 +61,7 @@ def test_cutter_toml_points_cutter_at_the_standins_and_sidecars(cfg, env):
     assert conf["paths"]["clips"] == str(work / "clips.json")
     # everything cutter regenerates is in the work tree, nothing of it in the data tree
     assert all(str(v).startswith(str(cfg.work_dir)) for v in conf["paths"].values())
+    assert conf["filmcraft"]["export_height"] == 360                  # renders at the stand-ins' size
 
 
 def test_analysis_runs_after_the_last_upload_and_only_once(cfg, env, monkeypatch, tmp_path):

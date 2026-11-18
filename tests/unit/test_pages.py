@@ -76,10 +76,35 @@ class TestReview:
         r = client.post(f"/api/projects/{pid}/review/done", json={"cut": "cut1"}, headers={"Accept-Language": "de"})
         assert r.status_code == 409 and "neueste" in r.json()["message"]
 
+    def test_cutters_frontend_in_a_frame(self, client, cfg):
+        pid = project_with_cut(client, cfg)
+        r = client.get(f"/projects/{pid}/review/app/")
+        assert r.status_code == 200 and "app.js" in r.text and "/static/css/review-embed.css" in r.text
+        assert r.headers["x-frame-options"] == "SAMEORIGIN" and "frame-ancestors 'self'" in r.headers["content-security-policy"]
+        assert client.get(f"/projects/{pid}/review/app/app.js").status_code == 200
+        assert client.get(f"/projects/{pid}/review/app", follow_redirects=False).status_code == 301
+        for bad in ("..%2Fserver.py", "server.py", "nothing.js"):
+            assert client.get(f"/projects/{pid}/review/app/{bad}").status_code == 404
+        # the frame's relative URLs reach the API and the media; the host's settings go to the frontend
+        d = client.get(f"/projects/{pid}/review/app/api/cuts", headers={"Accept-Language": "de"}).json()
+        assert d["app"]["person"] == "cutlery" and d["app"]["submit"] is False and d["app"]["embedded"] is True
+        assert d["app"]["ui_language"] == "de"
+        assert client.get(f"/projects/{pid}/review/app/media/cut1/timeline.json").status_code == 200
+        # Cutlery's own pages still refuse to be framed
+        assert client.get(f"/projects/{pid}/review").headers["x-frame-options"] == "DENY"
+
+    def test_review_done_takes_notes_for_the_next_cut(self, client, cfg, app, monkeypatch):
+        monkeypatch.setenv("FAKE_CLAUDE_SCENARIO", "slow")
+        pid = project_with_cut(client, cfg)
+        r = client.post(f"/api/projects/{pid}/review/done", json={"cut": "cut1", "note": "Shorter overall."})
+        assert r.status_code == 201
+        assert app.state.jobs.get(r.json()["job"])["note"] == "Shorter overall."
+        app.state.jobs.cancel_project(pid)
+
     def test_review_page(self, client, cfg):
         pid = project_with_cut(client, cfg)
         page = client.get(f"/projects/{pid}/review", headers={"Accept-Language": "de"}).text
-        assert "Vorschau aus den 360p-Kopien" in page and "Fertig → Export" in page and "review.js" in page
+        assert f'src="/projects/{pid}/review/app/"' in page and "Fertig → Export" in page and "review.js" in page
         empty = TestProjects().create(client, "Empty")
         assert "noch keine Fassung" in client.get(f"/projects/{empty}/review", headers={"Accept-Language": "de"}).text
 

@@ -402,3 +402,35 @@ def test_a_session_that_ends_without_a_cut_has_failed(env, monkeypatch):
     pid = env.project()
     j = env.wait(env.jobs.create(pid, "draft")["id"], "failed", "done")
     assert j["state"] == "failed" and j["reason"] == "no_cut" and "analysis files" in j["message"]
+
+
+def test_notes_preferences_and_project_memory_reach_the_prompt(env, tmp_path, monkeypatch):
+    from cutlery import memory
+    calls = tmp_path / "calls.jsonl"
+    monkeypatch.setenv("FAKE_CLAUDE_LOG", str(calls))
+    memory.write_preferences(env.cfg, "Calm cutting, no fast montages.")
+    pid = env.project()
+    with pytest.raises(JobError):
+        env.jobs.create(pid, "draft", "x" * (memory.MAX_NOTE + 1))
+    j = env.jobs.create(pid, "draft", "  More of the desert.\r\n")
+    assert j["note"] == "More of the desert."
+    env.wait(j["id"], "done")
+    prompt = json.loads(calls.read_text().splitlines()[0])["argv"]
+    prompt = prompt[prompt.index("-p") + 1]
+    assert "Calm cutting, no fast montages." in prompt and "More of the desert." in prompt
+    assert "CLAUDE.md" in prompt                                    # keep the project memory up to date
+    paths = env.projects.paths(pid)
+    assert memory.read_memory(paths).startswith("# Project memory")   # started before the first job
+
+
+def test_memory_and_preferences_api(client, app, cfg):
+    r = client.post("/projects/new", data={"name": "Memo"}, follow_redirects=False)
+    pid = r.headers["location"].split("/")[2]
+    assert client.get(f"/api/projects/{pid}/memory").json() == {"text": ""}
+    r = client.put(f"/api/projects/{pid}/memory", json={"text": "# Project memory\n\nLikes long shots.\r\n"})
+    assert r.status_code == 200 and r.json()["text"] == "# Project memory\n\nLikes long shots.\n"
+    assert (cfg.data_dir / "projects" / pid / "CLAUDE.md").read_text() == "# Project memory\n\nLikes long shots.\n"
+    assert client.put(f"/api/projects/{pid}/memory", json={"text": "x" * 20001}).status_code == 422
+    assert client.put("/api/preferences", json={"text": "Instrumental music only."}).status_code == 200
+    assert client.get("/api/preferences").json()["text"] == "Instrumental music only.\n"
+    assert "Meine Vorlieben" in client.get("/settings", headers={"Accept-Language": "de"}).text

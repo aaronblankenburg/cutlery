@@ -1,7 +1,9 @@
 """Claude Code jobs: one cut per job, run with `claude -p` in the project folder.
 
-A job is queued by the user ("Cut a draft", "Review done → next cut"). The scheduler starts queued jobs while fewer
-than `jobs_parallel` run, never two for one project. Each run is a fresh session: the project files are the context.
+A job is queued by the user ("Cut a draft", "Review done → next cut"), optionally with notes for this cut. The
+scheduler starts queued jobs while fewer than `jobs_parallel` run, never two for one project. Each run is a fresh
+session: the project files are the context, among them the project memory CLAUDE.md that the agent keeps up to date
+(memory.py); the user's preferences for all projects and the notes for this cut are part of the prompt.
 The executor runs the command (locally for development and tests, or in an isolated container through the runner,
 see runner.py); its stdout (stream-json) goes to a file that the scheduler reads as it grows and turns into log
 events for the UI. When the run ends, stream.outcome decides: done, paused (usage limit, authentication; resumed by
@@ -19,7 +21,7 @@ import secrets
 import threading
 import time
 
-from . import cutter_project, stream
+from . import cutter_project, memory, stream
 from .executor import NoCredential
 from .db import Database, now
 
@@ -50,6 +52,13 @@ PROMPTS = {
              "answer every comment of {previous} in the language of the comment, and finish with the timeline, the "
              "FilmCraft export and `cutter review-data {cut}`."),
 }
+MEMORY = (" The project memory is CLAUDE.md in this folder (Claude Code has read it already): follow it. Before you "
+          "finish, update it for the next cuts: what you learnt about the user's wishes (from the briefing, the notes and "
+          "the comments), what was tried and rejected, open points; keep it short and do not repeat what is in other files.")
+PREFERENCES = ("\n\nThe user's preferences for all films (they apply unless the briefing, the notes or the comments say "
+               "otherwise):\n<<<\n{text}\n>>>")
+NOTE = ("\n\nThe user's notes for this cut (they take precedence over the briefing where the two differ; record in "
+        "decisions.json how you followed them):\n<<<\n{text}\n>>>")
 RESUMED = (" An earlier session of this job stopped before it was finished (attempt {attempt}). Continue from the state "
            "of the project files: check what of the steps above exists already and do the rest.")
 
@@ -117,9 +126,12 @@ class Jobs:
 
     # ------------------------------------------------------------ user actions
 
-    def create(self, project_id: str, kind: str) -> dict:
+    def create(self, project_id: str, kind: str, note: str = "") -> dict:
         if kind not in KINDS:
             raise JobError(f"unknown job kind {kind}")
+        note = (note or "").replace("\r\n", "\n").strip()
+        if len(note) > memory.MAX_NOTE:
+            raise JobError("the notes are too long", "jobs.error.note_too_long")
         self.projects.get(project_id)
         paths = self.projects.paths(project_id)
         with self.lock:
@@ -141,8 +153,8 @@ class Jobs:
             model = self.cfg.model_draft if kind == "draft" else self.cfg.model_next
             jid = secrets.token_hex(8)
             with self.db.tx() as con:
-                con.execute("INSERT INTO jobs (id, project_id, kind, cut, state, model, created) VALUES (?,?,?,?,?,?,?)",
-                            (jid, project_id, kind, cut, "queued", model, now()))
+                con.execute("INSERT INTO jobs (id, project_id, kind, cut, state, model, created, note) "
+                            "VALUES (?,?,?,?,?,?,?,?)", (jid, project_id, kind, cut, "queued", model, now(), note or None))
         self._event(jid, {"kind": "queued", "text": f"{kind} {cut}, model {model}"})
         log.info("project %s: job %s queued (%s %s, %s)", project_id, jid, kind, cut, model)
         self.wake()
@@ -250,9 +262,14 @@ class Jobs:
         cuts = cutter_project.cuts(self.projects.paths(j["project_id"]))
         previous = cuts[-1] if cuts and j["kind"] == "next" else ""
         paths = self.projects.paths(j["project_id"])
-        prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous) + WHERE.format(work=paths.work)
+        prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous) + WHERE.format(work=paths.work) + MEMORY
         if j["attempt"] > 1:
             prompt += RESUMED.format(attempt=j["attempt"])
+        prefs = memory.read_preferences(self.cfg).strip()
+        if prefs:
+            prompt += PREFERENCES.format(text=prefs)
+        if j.get("note"):
+            prompt += NOTE.format(text=j["note"])
         return [self.cfg.claude_bin, "-p", prompt, "--output-format", "stream-json", "--verbose",
                 "--model", j["model"], "--max-turns", str(self.cfg.max_turns),
                 # never ask (nobody answers): what is not allowed here is denied
@@ -268,6 +285,7 @@ class Jobs:
         err = out.with_suffix(".err")
         out.write_bytes(b"")
         setup_project(paths, self.cfg.skill_dir)
+        cutter_project.write(paths, self.projects.get(j["project_id"])["name"])     # the current cutter.toml
         config_dir = d / f"claude-{j['attempt']}"            # a fresh Claude Code configuration per session
         config_dir.mkdir(exist_ok=True)
         spec = {"job": j["id"], "project": j["project_id"], "argv": self.command(j), "cwd": str(paths.data),
@@ -371,6 +389,7 @@ def setup_project(paths, skill_dir) -> None:
         link.unlink()
     link.symlink_to(skill_dir, target_is_directory=True)
     (paths.work / "tmp").mkdir(parents=True, exist_ok=True)
+    memory.ensure_memory(paths)
 
 
 def next_cut(name: str) -> str:

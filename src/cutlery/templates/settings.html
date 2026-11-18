@@ -36,6 +36,21 @@
   <p class="small muted">{{ t('settings.claude.env_note') }}</p>
   {% endif %}
 </section>
+
+<section class="card stack narrow" id="preferences-card">
+  <header><h2>{{ t('settings.preferences.title') }}</h2></header>
+  <form class="stack" id="preferences-form">
+    <div>
+      <label for="preferences">{{ t('settings.preferences.label') }}</label>
+      <textarea id="preferences" rows="8" maxlength="4000" placeholder="{{ t('settings.preferences.placeholder') }}"></textarea>
+      <p class="small muted">{{ t('settings.preferences.hint') }}</p>
+    </div>
+    <div class="row">
+      <button class="button primary" type="submit">{{ t('settings.preferences.save') }}</button>
+      <span class="small" id="preferences-status" aria-live="polite"></span>
+    </div>
+  </form>
+</section>
 {% endblock %}
 {% block scripts %}
 <script type="module" src="/static/js/settings.js"></script>

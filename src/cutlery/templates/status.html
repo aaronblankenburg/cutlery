@@ -36,6 +36,10 @@
       <button class="button danger" type="button" id="job-cancel" hidden>{{ t('jobs.cancel') }}</button>
     </div>
     <div class="notice error" id="job-error" hidden></div>
+    <details class="job-note" id="job-note-box" hidden>
+      <summary>{{ t('jobs.note_title') }}</summary>
+      <p class="pre-wrap small" id="job-note"></p>
+    </details>
     <div class="job-log" role="log" aria-label="{{ t('jobs.log_label') }}" id="job-log"></div>
     <details class="raw" id="job-raw-box" hidden>
       <summary>{{ t('jobs.raw') }}</summary>
@@ -85,6 +89,25 @@
         {% endfor %}
       </ul>
       {% else %}<p class="small muted">{{ t('cuts.none') }}</p>{% endif %}
+    </section>
+
+    <section class="card" id="memory-card">
+      <div class="row between"><h2>{{ t('memory.title') }}</h2>
+        <button class="link-button small" type="button" id="memory-edit">{{ t('memory.edit') }}</button></div>
+      <p class="small muted">{{ t('memory.lead') }}</p>
+      <details id="memory-box">
+        <summary class="small">{{ t('memory.show') }}</summary>
+        <pre class="memory-text" id="memory-text"></pre>
+      </details>
+      <form class="stack" id="memory-form" hidden>
+        <label class="visually-hidden" for="memory-input">{{ t('memory.title') }}</label>
+        <textarea id="memory-input" rows="14" maxlength="20000"></textarea>
+        <div class="row">
+          <button class="button primary" type="submit">{{ t('memory.save') }}</button>
+          <button class="button" type="button" id="memory-cancel">{{ t('memory.cancel') }}</button>
+        </div>
+      </form>
+      <p class="small" id="memory-status" aria-live="polite"></p>
     </section>
   </div>
 </div>

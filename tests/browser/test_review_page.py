@@ -1,4 +1,5 @@
-"""Browser test of the review page: comment at a moment, see the agent's notes, finish the review."""
+"""Browser test of the review page: cutter's review app in the frame, a comment at a moment, finishing the review
+with notes for the next cut."""
 import json
 import subprocess
 
@@ -33,22 +34,30 @@ def test_comment_and_finish_the_review(page, server, clips, monkeypatch):
     (cfg.data_dir / "projects" / pid / "cuts" / "cut1" / "edit.json").write_text("{}")
 
     page.goto(f"{server['url']}/projects/{pid}/review")
-    page.wait_for_function("() => window.cutleryReview && window.cutleryReview.cut")
-    assert page.locator(".comment.decision.assumption").count() == 1          # the agent's assumption
-    page.evaluate("() => { const v = document.getElementById('video'); v.currentTime = 13.0; }")
+    page.wait_for_function("() => window.cutleryReview && window.cutleryReview.shown === 'cut1'")   # the frame said so
+    box = page.locator("#review-frame").bounding_box()
+    assert box["width"] > 1000                                           # full width
+    frame = page.frame_locator("#review-frame")
+    frame.locator("#note").wait_for()
+    assert frame.locator("#name-button").is_hidden() or frame.locator("#name-button").is_disabled()   # the login is the name
+    page.evaluate("() => { const v = document.getElementById('review-frame').contentDocument.getElementById('video'); "
+                  "v.currentTime = 13.0; }")
     page.wait_for_timeout(500)
-    page.fill("#new", "Shorter here")
-    page.click("#new-comment button[type=submit]")
-    page.wait_for_function("() => window.cutleryReview.entries.length === 1")
-    e = page.evaluate("() => window.cutleryReview.entries[0]")
-    assert e["section"] == "Glacier" and abs(e["t"] - 13.0) < 0.5
-    assert page.locator("#marks .mark.open").count() == 1
-    page.once("dialog", lambda dlg: dlg.accept())
+    frame.locator("#note").fill("Shorter here")
+    frame.locator("#note").press("Enter")
+    api = f"/projects/{pid}/review/api/entries?cut=cut1"
+    page.wait_for_function(f"() => fetch('{api}').then(r => r.json()).then(d => d.entries.length === 1)")
+    e = page.evaluate(f"() => fetch('{api}').then(r => r.json()).then(d => d.entries[0])")
+    assert e["section"] == "Glacier" and abs(e["t"] - 13.0) < 0.5 and e["person"] == "cutlery"
+    page.wait_for_function("() => document.getElementById('review-state').textContent.includes('1')")
     page.click("#review-done")
+    page.fill("#done-note", "Shorter overall.")
+    page.click("#done-ok")
     page.wait_for_url(f"**/projects/{pid}")
     jobs = page.evaluate(f"() => fetch('/api/projects/{pid}/jobs').then(r => r.json())")
-    assert jobs["jobs"][0]["cut"] == "cut2"
+    assert jobs["jobs"][0]["cut"] == "cut2" and jobs["jobs"][0]["note"] == "Shorter overall."
+    assert page.locator("#job-note-box").is_visible()
     page.goto(f"{server['url']}/projects/{pid}/review")
-    page.wait_for_function("() => window.cutleryReview && window.cutleryReview.cut")
-    assert page.locator("#review-locked").is_visible() and page.locator("#new").is_disabled()
+    page.wait_for_function("() => window.cutleryReview && window.cutleryReview.cuts.length")
+    assert page.locator("#review-done").is_hidden()
     server["app"].state.jobs.cancel_project(pid)

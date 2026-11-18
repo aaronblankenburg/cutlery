@@ -76,6 +76,8 @@ function showJob(j) {
   if (j.attempt > 1) meta += ' · ' + t('jobs.attempt', { n: j.attempt });
   if (j.turns) meta += ' · ' + t('jobs.cost', { turns: j.turns, cost: j.cost_usd != null ? `$${j.cost_usd.toFixed(2)}` : '–' });
   $('job-meta').textContent = meta;
+  $('job-note-box').hidden = !j.note;
+  $('job-note').textContent = j.note || '';
   const banner = $('pause-banner');
   banner.hidden = !['paused', 'failed'].includes(j.state);
   if (j.state === 'paused') {
@@ -144,6 +146,35 @@ for (const input of document.querySelectorAll('[data-person]')) {
     }
   });
 }
+
+// ------------------------------------------------------------------ project memory (CLAUDE.md)
+
+async function loadMemory() {
+  const { text } = await api(`/api/projects/${project}/memory`);
+  $('memory-text').textContent = text || t('memory.empty');
+  return text;
+}
+$('memory-edit').addEventListener('click', async () => {
+  $('memory-input').value = await loadMemory();
+  $('memory-form').hidden = false;
+  $('memory-box').hidden = true;
+  $('memory-input').focus();
+});
+$('memory-cancel').addEventListener('click', () => { $('memory-form').hidden = true; $('memory-box').hidden = false; });
+$('memory-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api(`/api/projects/${project}/memory`, { method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: $('memory-input').value }) });
+    $('memory-form').hidden = true;
+    $('memory-box').hidden = false;
+    $('memory-status').textContent = t('memory.saved');
+    await loadMemory();
+  } catch (err) {
+    $('memory-status').textContent = err.message;
+  }
+});
+$('memory-box').addEventListener('toggle', () => { if ($('memory-box').open) loadMemory().catch(() => {}); });
 
 await refresh();
 setInterval(() => { if (current?.state === 'running') showJob(current); }, 30000);

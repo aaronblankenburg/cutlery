@@ -13,6 +13,9 @@ import re
 from .storage import ProjectPaths, write_atomic
 
 
+EXPORT_HEIGHT = 360
+
+
 def analysis_dir(paths: ProjectPaths) -> pathlib.Path:
     return paths.work / "analysis"
 
@@ -45,6 +48,11 @@ def render(paths: ProjectPaths, title: str, language: str = "") -> str:
         f"exports = {q(str(paths.work / 'exports'))}",
         # the review: comments stay with the project (cutter's default .cutter/review/data), renders are regenerable
         f"review_media = {q(str(review_media_dir(paths)))}",
+        "",
+        # renders on the server come from the 360p stand-ins: render at that size, not upscaled (the film in full
+        # resolution is made from the originals on the user's computer, see the export)
+        "[filmcraft]",
+        f"export_height = {EXPORT_HEIGHT}",
         "",
     ])
 

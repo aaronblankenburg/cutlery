@@ -187,7 +187,7 @@ $('job-draft').addEventListener('click', async () => {
   try {
     if (dirty || !current?.briefing_saved) await saveBriefing();
     await api(`/api/projects/${project}/jobs`, { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ kind: 'draft' }) });
+      body: JSON.stringify({ kind: 'draft', note: $('job-note-input').value }) });
     location.href = `/projects/${project}`;
   } catch (err) {
     $('job-error').hidden = false;

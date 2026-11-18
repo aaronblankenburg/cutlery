@@ -1,0 +1,23 @@
+/* Cutlery's look for cutter's review app in the frame of the review page (review.py). Only cutter's colour and font
+   variables and a few surfaces are overridden; the layout is cutter's. */
+@import url("fonts.css");
+
+:root {
+  --bg: #131417;
+  --panel: #18191D;
+  --panel2: #1C1E22;
+  --panel3: #25282D;
+  --line: #2C2F35;
+  --text: #EDEEF0;
+  --muted: #A3A9B3;
+  --accent: #F0A23B;
+  --accent-ink: #1A1206;
+  --danger: #F7A68A;
+  --ok: #6CCB94;
+  --radius: 10px;
+}
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); }
+.top { background: #16171A; }
+.time, #time, #position, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+select, input[type="text"], textarea { background: #101114; }
+h1, h2, h3, .title { font-family: 'Space Grotesk', system-ui, sans-serif; }

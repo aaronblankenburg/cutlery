@@ -10,12 +10,16 @@ import tempfile
 
 import anyio
 from starlette.exceptions import HTTPException
-from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from . import briefing, cutter_project, eta, files, i18n, overview
+from . import briefing, cutter_project, eta, files, i18n, overview, review
 from .jobs import JobError
 from .projects import NotFound
+
+# cutter's review frontend in a frame of the review page: its own policy (cutter's), framed by Cutlery pages only
+REVIEW_APP_CSP = ("default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'self'; script-src 'self'; "
+                  "connect-src 'self'; font-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'self'")
 
 PICTURE = re.compile(r"^[A-Za-z0-9_.-]{1,80}\.(jpg|png)$")
 ANALYSIS_KINDS = {"sheets": ".jpg", "strips": ".jpg", "overview": ".jpg", "faces": ".jpg"}
@@ -221,9 +225,32 @@ def routes(c: Context):
             if len(body) > 65536:
                 raise HTTPException(413, "request too large")
         user = (request.scope.get("state") or {}).get("user") or "cutlery"
+        # cutter's review app inside Cutlery: the reviewer is the logged-in user, the language Cutlery's, and
+        # "review done → next cut" is Cutlery's button above the frame (not cutter's "send the feedback")
+        app = {"title": p["name"], "person": user, "submit": False, "embedded": True,
+               "ui_language": c.lang_of(request)}
         status, ctype, data = await anyio.to_thread.run_sync(
-            reviews.api, p["id"], request.method, path, request.url.query, body, user)
+            reviews.api, p["id"], request.method, path, request.url.query, body, user, app)
         return Response(data, status_code=status, media_type=ctype, headers={"cache-control": "no-store"})
+
+    async def review_app_file(request):
+        """cutter's review frontend, served unchanged from the cutter package for the frame on the review page;
+        Cutlery adds only its stylesheet (colours, fonts) to the page."""
+        c.project_or_404(request.path_params["pid"])
+        name = request.path_params.get("name") or "index.html"
+        f = review.app_file(name)
+        if f is None:
+            raise HTTPException(404)
+        headers = {"cache-control": "no-cache", "x-frame-options": "SAMEORIGIN",
+                   "content-security-policy": REVIEW_APP_CSP}
+        if name == "index.html":
+            html = f.read_text(encoding="utf-8").replace(
+                "</head>", '<link rel="stylesheet" href="/static/css/review-embed.css">\n</head>', 1)
+            return HTMLResponse(html, headers=headers)
+        return FileResponse(f, headers=headers)
+
+    async def review_app_redirect(request):
+        return RedirectResponse(f"/projects/{request.path_params['pid']}/review/app/", status_code=301)
 
     async def review_media(request):
         p = c.project_or_404(request.path_params["pid"])
@@ -235,14 +262,15 @@ def routes(c: Context):
     async def review_done(request):
         """"Review done → next cut": lock the cut's comments and queue the next cut."""
         p = c.project_or_404(request.path_params["pid"])
-        cut = str((await c.read_json(request)).get("cut") or "")
+        data = await c.read_json(request)
+        cut = str(data.get("cut") or "")
         cuts = cutter_project.cuts(projects.paths(p["id"]))
         if not cuts or cut != cuts[-1]:
             return JSONResponse({"error": "only the newest cut can be finished", "message":
                                  i18n.translate(c.lang_of(request), "review.error.not_newest")}, status_code=409)
         await anyio.to_thread.run_sync(reviews.lock_cut, p["id"], cut)
         try:
-            j = await anyio.to_thread.run_sync(jobs.create, p["id"], "next")
+            j = await anyio.to_thread.run_sync(jobs.create, p["id"], "next", str(data.get("note") or ""))
         except JobError as e:
             await anyio.to_thread.run_sync(reviews.unlock_cut, p["id"], cut)
             return JSONResponse({"error": str(e), "message": i18n.translate(c.lang_of(request), e.key)}, status_code=409)
@@ -259,6 +287,11 @@ def routes(c: Context):
         Route("/projects/{pid}/thumb/{n:int}", thumb),
         Route("/projects/{pid}/review/api/{path:path}", review_api, methods=["GET", "POST", "PATCH", "DELETE"]),
         Route("/projects/{pid}/review/media/{cut}/{name}", review_media),
+        Route("/projects/{pid}/review/app", review_app_redirect),
+        Route("/projects/{pid}/review/app/", review_app_file),
+        Route("/projects/{pid}/review/app/api/{path:path}", review_api, methods=["GET", "POST", "PATCH", "DELETE"]),
+        Route("/projects/{pid}/review/app/media/{cut}/{name}", review_media),
+        Route("/projects/{pid}/review/app/{name}", review_app_file),
         Route("/api/projects/{pid}/state", api_state),
         Route("/api/projects/{pid}/files", api_files),
         Route("/api/projects/{pid}/files/{kind}/{name}", api_file, methods=["PUT", "DELETE"]),
