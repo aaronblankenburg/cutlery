@@ -26,10 +26,16 @@ from .db import Database, now
 log = logging.getLogger("cutlery.jobs")
 
 ACTIVE = ("queued", "running", "paused")
-# what the agent may do: cutter and ffprobe, reading and writing in the project (data and work tree), the skill,
-# searching and fetching music (the egress proxy limits the hosts, see runner.py)
-ALLOWED_TOOLS = ("Bash(cutter *)", "Bash(ffprobe *)", "Read", "Write", "Edit", "Glob", "Grep", "Skill(video-editing)",
+# what the agent may do: the shell (the skill runs cutter, ffmpeg, python and small pipelines; "Bash(cutter *)" alone
+# refused even `cd x; cutter …`), reading and writing in the project (data and work tree), the skill, searching and
+# fetching music. The job container is the boundary: only this project's folders, no capabilities, a read-only
+# system, network only through the egress allowlist (runner.py).
+ALLOWED_TOOLS = ("Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill(video-editing)",
                  "WebSearch", "WebFetch", "TodoWrite")
+# where things are: the agent works in the project folder (data tree); cutter.toml points cutter at the work tree
+WHERE = (" Where things are: this folder holds briefing.md, cutter.toml, the cuts and the user's files; the analysis "
+         "(clips.json, transcripts/, quality.txt, sheets/, image/), the 360p stand-ins and all renders are in the work "
+         "folder {work} (cutter.toml [paths]; cutter commands find them by themselves). cutter is on the PATH.")
 KINDS = ("draft", "next")
 
 PROMPTS = {
@@ -243,10 +249,10 @@ class Jobs:
     def command(self, j) -> list[str]:
         cuts = cutter_project.cuts(self.projects.paths(j["project_id"]))
         previous = cuts[-1] if cuts and j["kind"] == "next" else ""
-        prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous)
+        paths = self.projects.paths(j["project_id"])
+        prompt = PROMPTS[j["kind"]].format(cut=j["cut"], previous=previous) + WHERE.format(work=paths.work)
         if j["attempt"] > 1:
             prompt += RESUMED.format(attempt=j["attempt"])
-        paths = self.projects.paths(j["project_id"])
         return [self.cfg.claude_bin, "-p", prompt, "--output-format", "stream-json", "--verbose",
                 "--model", j["model"], "--max-turns", str(self.cfg.max_turns),
                 # never ask (nobody answers): what is not allowed here is denied
@@ -324,6 +330,10 @@ class Jobs:
             err = self._stream_file(j).with_suffix(".err")
             tail = err.read_text(encoding="utf-8", errors="replace")[-2000:] if err.exists() else ""
             result = stream.outcome(self.results.get(j["id"]), code, tail)
+            edit = self.projects.paths(j["project_id"]).data / "cuts" / j["cut"] / "edit.json"
+            if result["state"] == "done" and not edit.is_file():
+                # Claude ended normally but made no cut (it says why in its last message)
+                result = {**result, "state": "failed", "reason": "no_cut"}
         self._finish(j, result)
 
     def _finish(self, j, result, notify=True) -> None:

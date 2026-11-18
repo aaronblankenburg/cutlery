@@ -127,7 +127,8 @@ def test_draft_runs_to_done(env, tmp_path, monkeypatch):
     call = json.loads(calls.read_text().splitlines()[0])
     argv = call["argv"]
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
-    assert "Bash(cutter *)" in argv and "--dangerously-skip-permissions" not in argv
+    assert "Bash" in argv and "--dangerously-skip-permissions" not in argv
+    assert str(paths.work) in argv[argv.index("-p") + 1]             # the prompt says where the analysis is
     assert argv[argv.index("--output-format") + 1] == "stream-json" and "--verbose" in argv
     assert argv[argv.index("--model") + 1] == "claude-opus-5-5"
     assert argv[argv.index("-p") + 1].startswith("/video-editing ")
@@ -393,3 +394,11 @@ def test_token_expiry_warning(cfg, monkeypatch, tmp_path):
     with TestClient(create_app(dataclasses.replace(cfg, token_expires=soon)), headers=auth_header()) as c:
         r = c.get("/api/claude").json()
     assert (r["kind"], r["days_left"], r["warn"]) == ("oauth", 12, True)
+
+
+def test_a_session_that_ends_without_a_cut_has_failed(env, monkeypatch):
+    """Claude may end normally and say why it could not cut; that is not "done"."""
+    monkeypatch.setenv("FAKE_CLAUDE_SCENARIO", "no_cut")
+    pid = env.project()
+    j = env.wait(env.jobs.create(pid, "draft")["id"], "failed", "done")
+    assert j["state"] == "failed" and j["reason"] == "no_cut" and "analysis files" in j["message"]

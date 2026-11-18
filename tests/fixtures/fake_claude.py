@@ -106,6 +106,10 @@ if scenario == "auth":
     emit({"type": "result", "subtype": "error_during_execution", "is_error": True,
           "result": "OAuth token has expired · Please run /login", "num_turns": 0, "session_id": session})
     sys.exit(1)
+if scenario == "no_cut":
+    emit({"type": "result", "subtype": "success", "is_error": False, "num_turns": 6, "session_id": session,
+          "result": "I couldn't make the cut: the analysis files aren't here."})
+    sys.exit(0)
 if scenario == "max_turns":
     emit({"type": "result", "subtype": "error_max_turns", "is_error": True, "num_turns": 400, "session_id": session})
     sys.exit(1)

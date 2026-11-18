@@ -107,6 +107,10 @@ milestone (and before any model switch), so a fresh session can continue without
 - 0.1.12 (2026-11-17): an analysis the user stopped stays stopped across restarts (resume skipped nothing before).
   On the server, the 150 Namibia image analyses made without the vision models were removed to be measured again.
   CLIP tags and PANNs audio events (need PyTorch) stay out for now (user's decision).
+- 0.1.13 (2026-11-18): first real Claude run failed: `--allowedTools "Bash(cutter *)"` in dontAsk mode refused every
+  other shell command (`cd …; ls`, python, ffmpeg), and the agent looked for the analysis in the data tree. Now the
+  agent may use Bash (the job container is the boundary), the prompt names the work folder, and a session that ends
+  without cuts/<cut>/edit.json is `failed` (reason no_cut) with Claude's last message.
 - One unit-test run had one failure that did not repeat in two further runs (probably a timing test in test_jobs).
 
 ## Open questions
