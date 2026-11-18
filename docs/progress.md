@@ -157,6 +157,12 @@ milestone (and before any model switch), so a fresh session can continue without
   switchable off in the review (whole film / per shot), before/after stills; decided 2026-11-18: on as a
   suggestion, the review can switch it off. FilmCraft lumetri calibration: exposure in stops (v·2^(e/2.2)),
   temperature ln(R/B)≈0.0034·t, tint ln(G)≈−0.0015·t, blacks +0.0014·b.
+- 0.2.7 (2026-11-18): cutter 0.6.0: colour correction (cutter docs/formats.md, "Colour"). Suggested per shot,
+  applied in FilmCraft (Color Grading effect), a marker in the other exports; the review shows values, a
+  before/after still and switches per shot / whole film; switches carry over to the next cut. Tuned on Sossusvlei
+  cut2 (89 of 138 shots corrected, dusk/night/fire left alone). Measuring takes about 2 s per clip once
+  (analysis/color.json in the DATA project folder). Not done yet from the plan: looks for the whole film (LUTs,
+  presets), the Cutlery briefing option, the analysis view with before/after.
 
 ## Open questions
 
