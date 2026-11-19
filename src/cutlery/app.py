@@ -366,6 +366,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     async def api_job_events(request):
         """Server-sent events: the job's log as it grows, then its state; ends when the job is no longer active."""
         j = job_or_404(request.path_params["jid"])
+        if request.path_params.get("pid") not in (None, j["project_id"]):
+            raise HTTPException(404, "unknown job")
         after = int(request.query_params.get("after", "0") or 0)
 
         async def gen():
@@ -627,6 +629,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/telegram", api_telegram, methods=["GET", "POST", "DELETE"]),
         Route("/api/projects/{pid}/jobs", api_jobs, methods=["GET", "POST"]),
         Route("/api/jobs/{jid}/events", api_job_events),
+        Route("/api/projects/{pid}/jobs/{jid}/events", api_job_events),      # the same, also for a guest
         Route("/api/jobs/{jid}/raw", api_job_raw),
         Route("/api/jobs/{jid}/{action}", api_job_action, methods=["POST"]),
         Route("/api/claude", api_claude),

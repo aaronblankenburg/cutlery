@@ -84,7 +84,8 @@ To reach it from outside, put a reverse proxy with HTTPS in front:
 
 **Sharing with friends.** Project → *Share* makes a link per person (`https://…/s/<token>`, valid 7/30/90 days or
 until withdrawn). Whoever opens it can watch the cuts, comment (under the name you gave), look through the footage
-and suggest favourites, rejects and tags, which you take over or not; nothing else – the password still guards
+and suggest favourites, rejects and tags, which you take over or not, and see the project's status (read only, no
+renaming people); nothing else – the password still guards
 everything else. Only a hash of the token is stored; withdrawing a link stops it at once. The `/s/` path must reach
 Cutlery through the proxy like every other path (the examples do).
 

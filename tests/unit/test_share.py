@@ -55,6 +55,28 @@ class TestLink:
             r = g.request(method, path, json=body)
             assert r.status_code == 403, (method, path, r.status_code)
 
+    def test_the_status_page_read_only(self, app, client, cfg, guest_link):
+        pid, other, link = guest_link
+        g, _ = as_guest(app, link)
+        page = g.get(f"/projects/{pid}", headers={"Accept-Language": "de"})
+        assert page.status_code == 200
+        for owner_only in ('id="job-resume"', 'id="job-cancel"', 'id="job-raw"', 'id="memory-edit"', "data-person=",
+                           'id="merge-mode"', f'/projects/{pid}/analysis"'):
+            assert owner_only not in page.text, owner_only
+        for path in (f"/api/projects/{pid}/jobs", f"/api/projects/{pid}/egress", f"/api/projects/{pid}/memory"):
+            assert g.get(path).status_code == 200, path
+        for method, path, body in (
+                ("PUT", f"/api/projects/{pid}/people/P1", {"name": "Eve"}),
+                ("POST", f"/api/projects/{pid}/people/merge", {"ids": ["P1", "P2"], "name": "Eve"}),
+                ("GET", f"/api/projects/{pid}/people", None),
+                ("POST", f"/api/projects/{pid}/egress", {"domain": "example.org", "allow": True}),
+                ("PUT", f"/api/projects/{pid}/memory", {"text": "x"}),
+                ("GET", f"/api/jobs/{'0' * 16}/events", None), ("GET", f"/api/jobs/{'0' * 16}/raw", None),
+                ("POST", f"/api/jobs/{'0' * 16}/resume", None), ("POST", f"/api/jobs/{'0' * 16}/cancel", None),
+                ("GET", f"/api/projects/{other}/jobs", None), ("GET", f"/projects/{other}", None)):
+            r = g.request(method, path, json=body)
+            assert r.status_code == 403, (method, path, r.status_code)
+
     def test_comments_are_the_guests(self, app, client, cfg):
         from test_pages import project_with_cut
         pid = project_with_cut(client, cfg, ("cut1", "cut2"))
@@ -155,3 +177,7 @@ def test_the_list_of_paths():
     assert not share.guest_may("GET", f"/projects/{'b' * 10}/review", pid)
     assert not share.guest_may("DELETE", f"/api/projects/{pid}/clips/C1", pid)
     assert share.guest_may("GET", "/static/css/cutlery.css", pid) and not share.guest_may("POST", "/static/x", pid)
+    assert share.guest_may("GET", f"/projects/{pid}", pid) and not share.guest_may("POST", f"/projects/{pid}", pid)
+    assert share.guest_may("GET", f"/api/projects/{pid}/jobs/{'0' * 16}/events", pid)
+    assert not share.guest_may("GET", f"/api/projects/{pid}/jobs/{'0' * 16}/raw", pid)
+    assert not share.guest_may("POST", f"/api/projects/{pid}/jobs", pid)

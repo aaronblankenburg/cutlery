@@ -2,6 +2,7 @@
   {% if guest %}<span class="crumb-current">{{ project.name }}</span>
   <span class="tabs">
     <a href="/projects/{{ project.id }}/review" {% if tab == 'review' %}aria-current="page"{% endif %}>{{ t('project.nav.review') }}</a>
+    <a href="/projects/{{ project.id }}" {% if tab == 'status' %}aria-current="page"{% endif %}>{{ t('project.nav.status') }}</a>
     <a href="/projects/{{ project.id }}/material" {% if tab == 'material' %}aria-current="page"{% endif %}>{{ t('project.nav.material') }}</a>
   </span>
   {% else %}

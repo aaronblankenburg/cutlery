@@ -23,19 +23,19 @@
 
 <div class="banner-card warn" id="pause-banner" hidden>
   <span id="pause-text"></span>
-  <button class="button primary" type="button" id="job-resume">{{ t('jobs.resume') }}</button>
+  {% if not guest %}<button class="button primary" type="button" id="job-resume">{{ t('jobs.resume') }}</button>{% endif %}
 </div>
 
 <div class="egress-asks" id="egress-asks" aria-live="polite"></div>
 
-<div class="status-grid" id="jobs" data-project="{{ project.id }}">
+<div class="status-grid" id="jobs" data-project="{{ project.id }}"{% if guest %} data-guest="{{ guest.name }}"{% endif %}>
   <section class="card job-card">
     <div class="job-head">
       <div>
         <h1 id="job-heading">{{ t('jobs.none_title') }}</h1>
         <p class="small muted" id="job-meta">{{ t('jobs.none_note') }}</p>
       </div>
-      <button class="button danger" type="button" id="job-cancel" hidden>{{ t('jobs.cancel') }}</button>
+      {% if not guest %}<button class="button danger" type="button" id="job-cancel" hidden>{{ t('jobs.cancel') }}</button>{% endif %}
     </div>
     <div class="notice error" id="job-error" hidden></div>
     <details class="job-note" id="job-note-box" hidden>
@@ -43,10 +43,10 @@
       <p class="pre-wrap small" id="job-note"></p>
     </details>
     <div class="job-log" role="log" aria-label="{{ t('jobs.log_label') }}" id="job-log"></div>
-    <details class="raw" id="job-raw-box" hidden>
+    {% if not guest %}<details class="raw" id="job-raw-box" hidden>
       <summary>{{ t('jobs.raw') }}</summary>
       <p class="small muted">{{ t('jobs.raw_note') }} <a id="job-raw" href="#">{{ t('jobs.raw_download') }}</a></p>
-    </details>
+    </details>{% endif %}
   </section>
 
   <div class="side">
@@ -59,13 +59,24 @@
         <div><dt>{{ t('analysis.fact.places') }}</dt><dd>{{ t('analysis.fact.places_value', n=facts.gps) }}</dd></div>
       </dl>
       {% if a.state == 'failed' %}<div class="notice error">{{ t('footage.analysis.failed', message=a.message or '') }}</div>{% endif %}
-      <a href="/projects/{{ project.id }}/analysis">{{ t('analysis.view') }}</a>
+      {% if guest %}<a href="/projects/{{ project.id }}/material">{{ t('guest.to_material') }}</a>{% else %}<a href="/projects/{{ project.id }}/analysis">{{ t('analysis.view') }}</a>{% endif %}
     </section>
 
     <section class="card" id="people" data-project="{{ project.id }}">
       <div class="row between"><h2>{{ t('people.title') }}</h2><span class="pill">{{ t('people.private') }}</span></div>
-      <p class="small muted">{{ t('people.lead') }}</p>
-      {% if people %}
+      {% if not guest %}<p class="small muted">{{ t('people.lead') }}</p>{% endif %}
+      {% if people and guest %}
+      <div class="people">
+        {% for p in people %}
+        <div class="person" data-row="{{ p.id }}">
+          <span class="face">{% if p.pictures %}<img src="/projects/{{ project.id }}/analysis/faces/{{ p.pictures[0] }}" alt="" width="40" height="40" loading="lazy">{% else %}<span class="face-empty"></span>{% endif %}</span>
+          <span class="mono small">{{ p.id }}</span>
+          <span>{{ p.name or '–' }}</span>
+          <span class="small muted">{{ p.seconds }} s</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% elif people %}
       {% if people|length > 1 %}<button class="button small-button" type="button" id="merge-mode">{{ t('people.merge_mode') }}</button>{% endif %}
       <div class="people">
         {% for p in people %}
@@ -124,7 +135,7 @@
 
     <section class="card" id="memory-card">
       <div class="row between"><h2>{{ t('memory.title') }}</h2>
-        <button class="link-button small" type="button" id="memory-edit">{{ t('memory.edit') }}</button></div>
+        {% if not guest %}<button class="link-button small" type="button" id="memory-edit">{{ t('memory.edit') }}</button>{% endif %}</div>
       <p class="small muted">{{ t('memory.lead') }}</p>
       <details id="memory-box">
         <summary class="small">{{ t('memory.show') }}</summary>

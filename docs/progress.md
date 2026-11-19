@@ -175,6 +175,10 @@ milestone (and before any model switch), so a fresh session can continue without
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
 - 0.2.9 (2026-11-19), cutter 0.7.0: project format (16:9 film, 9:16 reel, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9),
   reframing onto faces and people; see "Formats" below.
+- 0.4.2 (2026-11-19): a guest also sees the status page, read only: job and log (events also under
+  /api/projects/<id>/jobs/<jid>/events, checked against the project), analysis facts, people's names (no inputs, no
+  merging, /people API still refused), internet access (no answers), project memory (no editing); no resume, cancel
+  or raw log.
 - 0.4.1 (2026-11-19): tag chips in the monitor with their × as one piece (the corners were rounded twice).
 - 0.4.0 (2026-11-19): sharing a project with a friend (share.py): Project → Share makes a link
   per person (/s/<id>.<secret>, SHA-256 of the secret in the `shares` table, migration 008; 7/30/90 days or until

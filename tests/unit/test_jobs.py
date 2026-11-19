@@ -364,6 +364,8 @@ def test_api_briefing_jobs_and_events(client, app, cfg, monkeypatch):
     j = client.post(f"/api/projects/{pid}/jobs", json={"kind": "draft"}).json()
     body = client.get(f"/api/jobs/{j['id']}/events").text           # streams until the job has ended
     assert "event: log" in body and '"kind": "result"' in body and '"state": "done"' in body
+    assert '"state": "done"' in client.get(f"/api/projects/{pid}/jobs/{j['id']}/events").text   # the same by project
+    assert client.get(f"/api/projects/{'b' * 10}/jobs/{j['id']}/events").status_code == 404
     listing = client.get(f"/api/projects/{pid}/jobs").json()
     assert listing["jobs"][0]["state"] == "done" and listing["cuts"] == ["cut1"]
     raw = client.get(f"/api/jobs/{j['id']}/raw")

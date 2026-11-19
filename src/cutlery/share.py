@@ -9,8 +9,10 @@ plain hash is enough); a link can expire and be revoked at once.
 What a guest may do is a fixed list of paths of the shared project (GUEST_PATHS): the review (cuts, comments: write,
 change and delete their own; the person is the guest's name), the material page (footage, transcripts, tags) and
 suggestions there (favourites, rejects, tags into suggestions.json, which the owner takes over or not – see
-material.py). Everything else – other projects, settings, uploads, deleting, the briefing, starting cuts, the
-export, the Claude and Telegram tokens – is refused, also everything added later that is not on the list.
+material.py), and the status page to look at (the job and its log, the analysis, the people's names, the internet
+access, the project memory) – but not to change anything there: no names, no merging, no answers to Claude, no
+resume or cancel, no raw log. Everything else – other projects, settings, uploads, deleting, the briefing, starting
+cuts, the export, the Claude and Telegram tokens – is refused, also everything added later that is not on the list.
 """
 from __future__ import annotations
 
@@ -46,6 +48,10 @@ GUEST_PATHS = [(frozenset(m.split()), re.compile(p + r"$")) for m, p in (
     ("PATCH DELETE", _A + r"/selects/[A-Za-z0-9_-]+"),
     ("GET HEAD", _P + r"/analysis/clip/[A-Za-z0-9_-]+\.mp4"),
     ("GET HEAD", _P + r"/analysis/(?:strips|faces)/[A-Za-z0-9_.-]+"),
+    # the status page, read only
+    ("GET HEAD", _P),
+    ("GET HEAD", _A + r"/(?:jobs|egress|memory)"),
+    ("GET HEAD", _A + r"/jobs/[A-Za-z0-9_-]+/events"),
 )]
 OPEN_PATHS = re.compile(r"^/(?:static/.+|i18n/[a-z]{2}\.json|lang/[a-z]{2})$")      # no project in them
 

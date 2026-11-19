@@ -1,4 +1,5 @@
 // Status page: the job of the project, live (server-sent events), pause and resume, cancel; the people's names.
+// A guest (a shared link) sees the same, read only: no buttons, no names to change, no answers to Claude.
 import { load, t } from './i18n.js';
 
 // "cut3" -> "Cut 3" / "Fassung 3"
@@ -9,6 +10,7 @@ import { markdown } from './md.js';
 const lang = document.documentElement.lang || 'en';
 const $ = (id) => document.getElementById(id);
 const project = $('jobs').dataset.project;
+const guest = $('jobs').dataset.guest || null;
 let source = null, shown = 0, current = null, lastResult = null;
 
 await load();
@@ -106,6 +108,7 @@ function showJob(j) {
     $('pause-text').textContent = t('jobs.failed', { message: j.message || j.reason });
     banner.className = 'banner-card bad';
   }
+  if (guest) return;
   $('job-cancel').hidden = !(active || j.state === 'paused');
   $('job-raw-box').hidden = j.state === 'queued';
   $('job-raw').href = `/api/jobs/${j.id}/raw`;
@@ -114,7 +117,7 @@ function showJob(j) {
 function follow(j) {
   source?.close();
   showJob(j);
-  source = new EventSource(`/api/jobs/${j.id}/events?after=${shown}`);
+  source = new EventSource(`/api/projects/${project}/jobs/${j.id}/events?after=${shown}`);
   source.addEventListener('log', (e) => {
     const ev = JSON.parse(e.data); shown = ev.n; logLine(ev);
     if (ev.kind === 'egress' || ev.kind === 'egress_allowed') loadEgress().catch(() => {});
@@ -144,11 +147,11 @@ function showError(err) {
   $('job-error').textContent = err ? err.message : '';
 }
 
-$('job-resume').addEventListener('click', async () => {
+$('job-resume')?.addEventListener('click', async () => {
   showError(null);
   try { follow(await api(`/api/jobs/${current.id}/resume`, { method: 'POST' })); } catch (err) { showError(err); }
 });
-$('job-cancel').addEventListener('click', async () => {
+$('job-cancel')?.addEventListener('click', async () => {
   if (!confirm(t('jobs.cancel_confirm'))) return;
   try { showJob(await api(`/api/jobs/${current.id}/cancel`, { method: 'POST' })); } catch (err) { showError(err); }
 });
@@ -286,7 +289,7 @@ async function loadEgress() {
       .then(loadEgress).catch(showError);
     yes.addEventListener('click', () => answer(true));
     no.addEventListener('click', () => answer(false));
-    box.append(text, yes, no);
+    if (guest) box.append(text); else box.append(text, yes, no);
     return box;
   }));
   const items = [
@@ -316,7 +319,7 @@ function closeMemory(force = false) {
   if (!force && $('memory-input').value !== memorySaved && !confirm(t('memory.discard'))) return;
   $('memory-dialog').close();
 }
-$('memory-edit').addEventListener('click', async () => {
+$('memory-edit')?.addEventListener('click', async () => {
   try {
     memorySaved = (await loadMemory()) || '';
   } catch (err) {

@@ -78,6 +78,10 @@ def test_share_with_a_friend(page, server, clips):
     g.keyboard.press("f")
     g.wait_for_selector("#mon-marks .mark.suggested")
     g.keyboard.press("Escape")
+    # the status, read only
+    g.click(f".project-nav a[href$='/projects/{pid}']")
+    g.wait_for_selector("#job-heading")
+    assert g.locator("#job-resume, #job-cancel, #memory-edit, [data-person]").count() == 0
     # what is not the guest's: back to the review
     g.goto(f"{server['url']}/settings")
     g.wait_for_url(f"**/projects/{pid}/review")
