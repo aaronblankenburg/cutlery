@@ -32,7 +32,7 @@ class Projects:
 
     # ------------------------------------------------------------ projects
 
-    def create(self, name: str, frame: str | None = None) -> dict:
+    def create(self, name: str, frame: str | None = None, parts=None) -> dict:
         from . import cutter_project
         name = " ".join((name or "").split())[:120]
         if not name:
@@ -40,9 +40,13 @@ class Projects:
         frame = frame or cutter_project.DEFAULT_FRAME
         if frame not in cutter_project.FRAMES:
             raise ValueError("unknown frame")
+        if parts is not None and set(parts) - set(cutter_project.ANALYSIS_PARTS):
+            raise ValueError("unknown analysis part")
         pid = secrets.token_hex(5)
         self.paths(pid).create()
         cutter_project.set_frame(self.paths(pid), frame)
+        if parts is not None:
+            cutter_project.set_analysis_parts(self.paths(pid), list(parts))
         t = now()
         with self.db.tx() as con:
             con.execute("INSERT INTO projects (id, name, created, updated) VALUES (?,?,?,?)", (pid, name, t, t))

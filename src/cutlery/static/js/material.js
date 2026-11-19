@@ -1,8 +1,10 @@
 // Material page: the footage by day, as in an editor's project window. Tiles (or a list) sorted by recording time,
 // grouped by day; moving the mouse across a tile scrubs through the clip; a click opens the source monitor with the
-// transcript (a click on a word jumps there) and the user's selection: favourites and rejects for a whole clip or an
-// In/Out range, with a note (selects.json; Claude reads it for the next cut). Everything stays on this page: the data
-// comes from /api/projects/<id>/material, the pictures from the analysis, the video from the 360p copies.
+// transcript (a click on a word jumps there) and the user's selection: favourites, rejects and own tags for a whole
+// clip or an In/Out range, with a note (selects.json; Claude reads it for the next cut). Tags found by the analysis
+// (what is in the picture, objects, camera moves) filter the footage too and show where they are in the clip.
+// Ctrl/Shift-click chooses several clips to tag or mark at once. Everything stays on this page: the data comes from
+// /api/projects/<id>/material, the pictures from the analysis, the video from the 360p copies.
 import { load, t, lang } from './i18n.js';
 import { duration as fmtDuration } from './format.js';
 
@@ -15,7 +17,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(`cutlery-material-${k}`, JSON.stringify(v)); } catch { /* private window */ } },
 };
 const S = { clips: [], byId: new Map(), days: [], people: new Map(), cuts: [], selects: [], shown: [], open: null,
-  rIn: null, rOut: null, words: [], speed: 0 };
+  rIn: null, rOut: null, words: [], speed: 0, detail: null, chosen: new Set(), anchor: null };
 
 await load();
 
@@ -45,6 +47,20 @@ function dayTitle(day) {
 }
 const dayShort = (day) => (day ? new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'numeric' }).format(new Date(`${day}T12:00:00`)) : '?');
 const marksOf = (cid) => S.selects.filter((s) => s.clip === cid);
+const userTagsOf = (cid) => marksOf(cid).filter((s) => s.kind === 'tag');
+// tags: "u:<name>" the user's own, "c:" what is in the picture, "o:" objects, "m:" camera moves
+const KINDS = [['u', 'material.tags_mine'], ['c', 'material.tags_content'], ['o', 'material.tags_objects'], ['m', 'material.tags_moves']];
+const FIELD = { c: 'tags', o: 'objects', m: 'moves' };
+function tagLabel(kind, name) {
+  if (kind === 'u') return name;
+  const key = `tag.${kind}.${name}`, v = t(key);
+  return v === key ? name.replaceAll('_', ' ') : v;
+}
+function clipHas(c, key) {
+  const kind = key[0], name = key.slice(2);
+  if (kind === 'u') return userTagsOf(c.id).some((m) => m.tag === name);
+  return (c[FIELD[kind]] || []).some(([n]) => n === name);
+}
 const clipUrl = (cid) => `/projects/${project}/analysis/clip/${encodeURIComponent(cid)}.mp4`;
 const stripUrl = (cid) => `/projects/${project}/analysis/strips/${encodeURIComponent(cid)}.jpg`;
 const latestCut = () => S.cuts[S.cuts.length - 1] || null;
@@ -56,6 +72,7 @@ async function refresh() {
   S.clips = d.clips; S.days = d.days; S.cuts = d.cuts; S.selects = d.selects;
   S.byId = new Map(S.clips.map((c) => [c.id, c]));
   S.people = new Map(d.people.map((p) => [p.id, p.name]));
+  for (const id of [...S.chosen]) if (!S.byId.has(id)) S.chosen.delete(id);
   $('m-loading').hidden = true;
   $('m-empty').hidden = S.clips.length > 0;
   $('material-bar').hidden = S.clips.length === 0;
@@ -76,6 +93,16 @@ function options() {
   const latest = latestCut();
   $('m-used').options[1].textContent = latest ? t('material.used_in', { cut: latest }) : t('material.used_yes');
   $('m-used').options[2].textContent = latest ? t('material.unused_in', { cut: latest }) : t('material.used_no');
+  tagNames();
+}
+
+// the names offered when typing a tag: the user's own first, then what the analysis found in the picture
+function tagNames() {
+  const dl = $('m-tag-names');
+  dl.textContent = '';
+  const own = [...new Set(S.selects.filter((s) => s.kind === 'tag').map((s) => s.tag))].sort((a, b) => a.localeCompare(b, lang));
+  const found = [...new Set(S.clips.flatMap((c) => (c.tags || []).map(([n]) => tagLabel('c', n))))].sort((a, b) => a.localeCompare(b, lang));
+  for (const n of [...own, ...found.filter((x) => !own.includes(x))]) dl.append(new Option(n));
 }
 
 // ------------------------------------------------------------------ filters
@@ -101,8 +128,83 @@ function passes(c) {
   const kinds = new Set(marksOf(c.id).map((m) => m.kind));
   if (F.mark === 'favorite' && !kinds.has('favorite')) return false;
   if (F.mark === 'reject' && !kinds.has('reject')) return false;
-  if (F.mark === 'none' && kinds.size) return false;
+  if (F.mark === 'none' && [...kinds].some((k) => k !== 'tag')) return false;
+  for (const key of F.tags || []) if (!clipHas(c, key)) return false;
   return true;
+}
+
+// ------------------------------------------------------------------ tag filter (all chosen tags must be there)
+
+F.tags = Array.isArray(F.tags) ? F.tags : [];
+const pop = $('m-tags-pop'), popBtn = $('m-tags-btn');
+function setTags(keys) { F.tags = keys; store.set('filters', F); render(); }
+function openPop(open) {
+  pop.hidden = !open;
+  popBtn.setAttribute('aria-expanded', String(open));
+  if (open) { $('m-tags-search').value = ''; tagList(); $('m-tags-search').focus(); }
+}
+popBtn.addEventListener('click', () => openPop(pop.hidden));
+document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !e.target.closest('.tag-filter')) openPop(false); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !pop.hidden) { e.stopImmediatePropagation(); openPop(false); popBtn.focus(); }
+}, true);
+$('m-tags-search').addEventListener('input', tagList);
+function counts() {
+  const n = new Map();
+  const add = (key) => n.set(key, (n.get(key) || 0) + 1);
+  for (const c of S.clips) {
+    for (const tag of new Set(userTagsOf(c.id).map((m) => m.tag))) add(`u:${tag}`);
+    for (const kind of ['c', 'o', 'm']) for (const [name] of c[FIELD[kind]] || []) add(`${kind}:${name}`);
+  }
+  return n;
+}
+function tagList() {
+  const box = $('m-tags-list'), q = $('m-tags-search').value.trim().toLowerCase();
+  box.textContent = '';
+  const n = counts();
+  for (const [kind, title] of KINDS) {
+    const keys = [...n.keys()].filter((k) => k[0] === kind && tagLabel(kind, k.slice(2)).toLowerCase().includes(q))
+      .sort((a, b) => n.get(b) - n.get(a) || a.localeCompare(b, lang));
+    if (!keys.length) continue;
+    box.append(el('h4', 'tag-group-title', t(title)));
+    const row = el('div', 'tag-chips');
+    for (const key of keys.slice(0, 60)) {
+      const on = F.tags.includes(key);
+      const b = el('button', `tag-chip k-${kind}${on ? ' on' : ''}`);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(on));
+      b.append(el('span', null, tagLabel(kind, key.slice(2))), el('span', 'n', String(n.get(key))));
+      b.dataset.key = key;
+      b.addEventListener('click', () => {
+        setTags(on ? F.tags.filter((x) => x !== key) : [...F.tags, key]);
+        tagList();
+        box.querySelector(`.tag-chip[data-key="${CSS.escape(key)}"]`)?.focus();     // the list is new: keep the place
+      });
+      row.append(b);
+    }
+    box.append(row);
+  }
+  if (!box.children.length) box.append(el('p', 'small muted', S.clips.length ? t('material.tags_none_found') : t('material.tags_none')));
+}
+function activeTags() {
+  const box = $('m-active-tags');
+  box.textContent = '';
+  box.hidden = !F.tags.length;
+  $('m-tags-n').textContent = F.tags.length ? String(F.tags.length) : '';
+  for (const key of F.tags) {
+    const chip = el('button', `tag-chip k-${key[0]} on`);
+    chip.type = 'button';
+    chip.title = t('material.tag_remove_filter');
+    chip.append(el('span', null, tagLabel(key[0], key.slice(2))), el('span', 'x', '×'));
+    chip.addEventListener('click', () => setTags(F.tags.filter((x) => x !== key)));
+    box.append(chip);
+  }
+  if (F.tags.length > 1) {
+    const clear = el('button', 'link-button small', t('material.tags_clear'));
+    clear.type = 'button';
+    clear.addEventListener('click', () => setTags([]));
+    box.append(clear);
+  }
 }
 
 // ------------------------------------------------------------------ view
@@ -131,6 +233,8 @@ root.style.setProperty('--tile', `${size}px`);
 function render() {
   for (const [id, key] of [['m-camera', 'camera'], ['m-person', 'person'], ['m-used', 'used'], ['m-mark', 'mark']]) $(id).value = F[key] || '';
   S.shown = S.clips.filter(passes);
+  activeTags();
+  selection();
   $('m-count').textContent = t('material.count', { n: S.shown.length, all: S.clips.length });
   const body = $('m-body');
   body.textContent = '';
@@ -173,6 +277,16 @@ function badges(c) {
   const kinds = new Set(marksOf(c.id).map((m) => m.kind));
   if (kinds.has('favorite')) box.append(el('span', 'badge fav', '★'));
   if (kinds.has('reject')) box.append(el('span', 'badge rej', '⊘'));
+  // tags: the user's own (accent) first, then what is in the picture; three at most, "+n" for the rest
+  const own = [...new Set(userTagsOf(c.id).map((m) => m.tag))].map((n) => ['u', n]);
+  const found = (c.tags || []).map(([n]) => ['c', n]);
+  const all = [...own, ...found];
+  for (const [kind, name] of all.slice(0, 3)) box.append(el('span', `badge ${kind === 'u' ? 'utag' : 'atag'}`, tagLabel(kind, name)));
+  if (all.length > 3) {
+    const more = el('span', 'badge atag', `+${all.length - 3}`);
+    more.title = all.slice(3).map(([k, n]) => tagLabel(k, n)).join(', ');
+    box.append(more);
+  }
   return box;
 }
 
@@ -194,7 +308,7 @@ function qualityBar(c, cls = 'qbar') {
 function grid(clips) {
   const g = el('div', 'tiles');
   for (const c of clips) {
-    const tile = el('div', 'tile');
+    const tile = el('div', S.chosen.has(c.id) ? 'tile chosen' : 'tile');
     tile.tabIndex = 0;
     tile.dataset.id = c.id;
     tile.setAttribute('role', 'button');
@@ -206,12 +320,26 @@ function grid(clips) {
     if (c.strip) frame.dataset.strip = stripUrl(c.id);
     pic.append(frame);
     pic.append(el('span', 'tile-time', timeOf(c)), el('span', 'tile-dur', mmss(c.duration, false)));
+    const pick = el('input', 'tile-pick');
+    pick.type = 'checkbox';
+    pick.checked = S.chosen.has(c.id);
+    pick.setAttribute('aria-label', t('material.sel_clip', { file: c.file }));
+    pick.addEventListener('click', (e) => { e.stopPropagation(); choose(c.id, e.shiftKey ? 'range' : 'toggle'); });
+    pic.append(pick);
     tile.append(pic, qualityBar(c));
     const name = el('div', 'tile-name', c.file);
     name.title = `${c.id} · ${c.rel_path} · ${c.camera}`;
     tile.append(name, badges(c));
-    tile.addEventListener('click', () => openMonitor(c.id));
-    tile.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openMonitor(c.id); } });
+    tile.addEventListener('click', (e) => {
+      if (e.shiftKey) choose(c.id, 'range');
+      else if (e.ctrlKey || e.metaKey) choose(c.id, 'toggle');
+      else if (S.chosen.size) choose(c.id, 'toggle');                 // while choosing, a click adds or removes
+      else openMonitor(c.id);
+    });
+    tile.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); openMonitor(c.id); }
+      if (e.key === ' ') { e.preventDefault(); choose(c.id, e.shiftKey ? 'range' : 'toggle'); }
+    });
     pic.addEventListener('mouseenter', () => scrubStart(pic, c));
     pic.addEventListener('mousemove', (e) => scrubMove(pic, c, e));
     pic.addEventListener('mouseleave', () => scrubEnd(pic));
@@ -280,25 +408,89 @@ function scrubEnd() {
   scrub = null;
 }
 
+// ------------------------------------------------------------------ several clips at once
+
+function choose(cid, how) {
+  if (how === 'range' && S.anchor && S.anchor !== cid) {
+    const ids = S.shown.map((c) => c.id), a = ids.indexOf(S.anchor), b = ids.indexOf(cid);
+    if (a >= 0 && b >= 0) for (const id of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) S.chosen.add(id);
+  } else if (S.chosen.has(cid)) S.chosen.delete(cid);
+  else S.chosen.add(cid);
+  S.anchor = cid;
+  for (const tile of document.querySelectorAll('.tile[data-id]')) {
+    const on = S.chosen.has(tile.dataset.id);
+    tile.classList.toggle('chosen', on);
+    const box = tile.querySelector('.tile-pick');
+    if (box) box.checked = on;
+  }
+  for (const row of document.querySelectorAll('.material-table tr[data-id]')) row.classList.toggle('chosen', S.chosen.has(row.dataset.id));
+  selection();
+}
+function selection() {
+  const n = S.chosen.size;
+  $('m-selbar').hidden = !n;
+  $('m-sel-hint').hidden = n > 0 || !S.clips.length;
+  if (n) $('m-sel-n').textContent = t(n === 1 ? 'material.sel_one' : 'material.sel_n', { n });
+}
+async function addMany(items, done) {
+  try {
+    const r = await api(`/api/projects/${project}/selects`, { method: 'POST', body: JSON.stringify({ items }) });
+    for (const s of r.selects) if (!S.selects.some((x) => x.id === s.id)) S.selects.push(s);
+    tagNames();
+    render();
+    flashBar(done);
+  } catch (e) { alert(e.message); }
+}
+function flashBar(text) {
+  const n = $('m-sel-n'), old = n.textContent;
+  n.textContent = text;
+  setTimeout(() => { if (n.textContent === text) selection(); }, 1600);
+  if (!old) selection();
+}
+$('m-sel-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const tag = $('m-sel-tag').value.trim();
+  if (!tag || !S.chosen.size) { $('m-sel-tag').focus(); return; }
+  addMany([...S.chosen].map((clip) => ({ clip, kind: 'tag', tag })), t('material.tagged_n', { tag, n: S.chosen.size }));
+  $('m-sel-tag').value = '';
+});
+$('m-sel-fav').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'favorite' })), t('material.saved_favorite')));
+$('m-sel-rej').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'reject' })), t('material.saved_reject')));
+$('m-sel-clear').addEventListener('click', () => { S.chosen.clear(); S.anchor = null; render(); });
+document.addEventListener('keydown', (e) => {
+  if (mon.open || !S.chosen.size || e.key !== 'Escape' || !pop.hidden) return;
+  S.chosen.clear(); S.anchor = null; render();
+});
+
 // ------------------------------------------------------------------ list
 
 function table(clips) {
   const tb = el('table', 'material-table');
   const head = tb.createTHead().insertRow();
-  for (const k of ['time', 'file', 'duration', 'camera', 'speech', 'people', 'used', 'mark']) head.append(el('th', null, t(`material.col.${k}`)));
+  for (const k of ['time', 'file', 'duration', 'camera', 'speech', 'people', 'tags', 'used', 'mark']) head.append(el('th', null, t(`material.col.${k}`)));
   const body = tb.createTBody();
   const latest = latestCut();
   for (const c of clips) {
     const r = body.insertRow();
+    if (S.chosen.has(c.id)) r.className = 'chosen';
     r.tabIndex = 0;
     r.dataset.id = c.id;
     const kinds = new Set(marksOf(c.id).map((m) => m.kind));
     const used = c.used.filter((u) => u.cut === latest).map((u) => u.nr);
     for (const v of [timeOf(c), c.file, mmss(c.duration, false), c.camera, c.words ? String(c.words) : '',
-      c.people.map((p) => S.people.get(p) || p).join(', '), used.length ? `${latest} · ${used.join(', ')}` : '',
+      c.people.map((p) => S.people.get(p) || p).join(', '),
+      [...new Set(userTagsOf(c.id).map((m) => m.tag)), ...(c.tags || []).slice(0, 3).map(([n]) => tagLabel('c', n))].join(', '),
+      used.length ? `${latest} · ${used.join(', ')}` : '',
       `${kinds.has('favorite') ? '★' : ''}${kinds.has('reject') ? '⊘' : ''}`]) r.insertCell().textContent = v;
-    r.addEventListener('click', () => openMonitor(c.id));
-    r.addEventListener('keydown', (e) => { if (e.key === 'Enter') openMonitor(c.id); });
+    r.addEventListener('click', (e) => {
+      if (e.shiftKey) choose(c.id, 'range');
+      else if (e.ctrlKey || e.metaKey || S.chosen.size) choose(c.id, 'toggle');
+      else openMonitor(c.id);
+    });
+    r.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') openMonitor(c.id);
+      if (e.key === ' ') { e.preventDefault(); choose(c.id, 'toggle'); }
+    });
   }
   const wrap = el('div', 'table-wrap');
   wrap.append(tb);
@@ -314,7 +506,7 @@ async function openMonitor(cid) {
   scrubEnd();
   const c = S.byId.get(cid);
   if (!c) return;
-  S.open = cid; S.rIn = S.rOut = null; S.words = [];
+  S.open = cid; S.rIn = S.rOut = null; S.words = []; S.detail = null;
   stopShuttle();
   $('mon-title').textContent = c.file;
   const meta = [c.created ? `${dayTitle(c.day)}, ${timeOf(c)}` : t('material.no_date'), mmss(c.duration), c.camera,
@@ -334,7 +526,12 @@ async function openMonitor(cid) {
   video.currentTime = 0;
   $('mon-note').value = '';
   if (!mon.open) mon.showModal();
-  showMarks(); showRange(); track();
+  showMarks(); showRange(); track(); showTags();
+  api(`/api/projects/${project}/material/${encodeURIComponent(cid)}/tags`).then((d) => {
+    if (S.open !== cid) return;
+    S.detail = d;
+    showTags();
+  }).catch(() => {});
   const tr = $('mon-transcript');
   tr.textContent = '';
   tr.append(el('p', 'small muted', t('material.loading')));
@@ -386,7 +583,7 @@ function transcript(d) {
 function showMarks() {
   const ul = $('mon-marks');
   ul.textContent = '';
-  for (const m of marksOf(S.open)) {
+  for (const m of marksOf(S.open).filter((x) => x.kind !== 'tag')) {
     const li = el('li', `mark ${m.kind}`);
     const label = el('button', 'mark-label', `${m.kind === 'favorite' ? '★' : '⊘'} ${m.in == null ? t('material.whole_clip') : `${mmss(m.in)}–${mmss(m.out)}`}`);
     label.type = 'button';
@@ -412,6 +609,106 @@ function showMarks() {
     ul.append(li);
   }
 }
+// tags of this clip: the user's own (with range, ×), the field to add one, and what the analysis found; pointing at
+// a tag shows where it is on the bar under the picture, a click jumps there
+function showTags() {
+  const c = current();
+  if (!c) return;
+  const own = $('mon-utags');
+  own.textContent = '';
+  for (const m of userTagsOf(c.id)) {
+    const chip = el('span', 'tag-chip k-u on');
+    const go = el('button', 'tag-go', `${m.tag}${m.in == null ? '' : ` · ${mmss(m.in)}–${mmss(m.out)}`}`);
+    go.type = 'button';
+    go.title = m.in == null ? t('material.whole_clip') : t('material.mark_jump');
+    go.addEventListener('click', () => seek(m.in ?? 0));
+    hover(go, m.in == null ? [[0, c.duration]] : [[m.in, m.out]]);
+    const del = el('button', 'x', '×');
+    del.type = 'button';
+    del.title = t('material.tag_delete', { tag: m.tag });
+    del.setAttribute('aria-label', del.title);
+    del.addEventListener('click', async () => {
+      try {
+        await api(`/api/projects/${project}/selects/${m.id}`, { method: 'DELETE' });
+        S.selects = S.selects.filter((x) => x.id !== m.id);
+        showTags(); track(); tagNames();
+      } catch (e) { alert(e.message); }
+    });
+    chip.append(go, del);
+    own.append(chip);
+  }
+  if (!own.children.length) own.append(el('span', 'small muted', t('material.tags_own_none')));
+  scope();
+  const box = $('mon-atags');
+  box.textContent = '';
+  const d = S.detail;
+  if (!d) return;
+  for (const [kind, title] of KINDS.slice(1)) {
+    const items = Object.entries(d[FIELD[kind]] || {}).map(([name, rs]) => [name, rs, rs.reduce((a, [x, y]) => a + y - x, 0)])
+      .sort((a, b) => b[2] - a[2]);
+    if (!items.length) continue;
+    box.append(el('h4', 'tag-group-title', t(title)));
+    const row = el('div', 'tag-chips');
+    for (const [name, rs, secs] of items) {
+      const b = el('button', `tag-chip k-${kind}`);
+      b.type = 'button';
+      b.append(el('span', null, tagLabel(kind, name)), el('span', 'n', `${Math.round(secs)} s`));
+      b.title = rs.map(([x, y]) => `${mmss(x)}–${mmss(y)}`).join(', ');
+      b.addEventListener('click', () => {           // to the next place after the playhead, then round again
+        const next = rs.find(([x]) => x > video.currentTime + 0.2) || rs[0];
+        seek(next[0]);
+      });
+      hover(b, rs);
+      row.append(b);
+    }
+    box.append(row);
+  }
+}
+function hover(button, ranges) {
+  const show = (on) => {
+    const hl = $('mon-hl'), c = current();
+    hl.textContent = '';
+    if (!on || !c) return;
+    const d = c.duration || 1;
+    for (const [a, b] of ranges) {
+      const s = el('span', 'hl');
+      s.style.left = `${(a / d) * 100}%`;
+      s.style.width = `${Math.max(0.4, ((b - a) / d) * 100)}%`;
+      hl.append(s);
+    }
+  };
+  button.addEventListener('mouseenter', () => show(true));
+  button.addEventListener('mouseleave', () => show(false));
+  button.addEventListener('focus', () => show(true));
+  button.addEventListener('blur', () => show(false));
+}
+function scope() {
+  const c = current();
+  if (!c) return;
+  $('mon-tag-scope').textContent = S.rIn != null || S.rOut != null
+    ? t('material.tag_scope_range', { a: mmss(S.rIn ?? 0), b: mmss(S.rOut ?? c.duration) })
+    : t('material.tag_scope_clip');
+}
+$('mon-tag-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const c = current(), input = $('mon-tag'), tag = input.value.trim();
+  if (!c || !tag) return;
+  const body = { clip: c.id, kind: 'tag', tag };
+  if (S.rIn != null || S.rOut != null) {
+    const a = S.rIn ?? 0, b = S.rOut ?? c.duration;
+    if (b > a) Object.assign(body, { in: a, out: b });
+  }
+  try {
+    const s = await api(`/api/projects/${project}/selects`, { method: 'POST', body: JSON.stringify(body) });
+    if (!S.selects.some((x) => x.id === s.id)) S.selects.push(s);
+    input.value = '';
+    S.rIn = S.rOut = null;
+    showRange(); showTags(); track(); tagNames();
+    flash(t('material.tagged', { tag }));
+    input.blur();
+  } catch (err) { alert(err.message); }
+});
+
 async function mark(kind) {
   const c = current();
   if (!c) return;
@@ -449,7 +746,17 @@ function track() {
   const sl = $('mon-selects');
   sl.textContent = '';
   const d = c.duration || 1;
-  for (const m of marksOf(c.id)) {
+  const tl = $('mon-tagl');
+  tl.textContent = '';
+  for (const m of userTagsOf(c.id)) {
+    const s = el('span', 'msel tag');
+    const a = m.in ?? 0, b = m.out ?? d;
+    s.style.left = `${(a / d) * 100}%`;
+    s.style.width = `${((b - a) / d) * 100}%`;
+    s.title = m.tag;
+    tl.append(s);
+  }
+  for (const m of marksOf(c.id).filter((x) => x.kind !== 'tag')) {
     const s = el('span', `msel ${m.kind}`);
     const a = m.in ?? 0, b = m.out ?? d;
     s.style.left = `${(a / d) * 100}%`;
@@ -471,6 +778,7 @@ function head() {
 }
 function showRange() {
   const c = current(), r = $('mon-range');
+  scope();
   if (!c || (S.rIn == null && S.rOut == null)) { r.hidden = true; $('mon-range-text').textContent = ''; return; }
   const d = c.duration || 1, a = S.rIn ?? 0, b = S.rOut ?? d;
   r.hidden = false;
@@ -538,12 +846,13 @@ document.addEventListener('keydown', (e) => {
   const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName);
   if (typing) {
     if (e.key === 'Enter' && e.target.id === 'mon-note') { e.preventDefault(); mark('favorite'); }
+    if (e.key === 'Escape' && e.target.id === 'mon-tag') { e.preventDefault(); e.target.value = ''; e.target.blur(); }
     return;
   }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const fn = {
     ' ': toggle, k: stop, l: forwards, j: backwards, i: setIn, o: setOut, f: () => mark('favorite'), x: () => mark('reject'),
-    n: () => $('mon-note').focus(), ArrowLeft: () => frame(e.shiftKey ? -5 : -1), ArrowRight: () => frame(e.shiftKey ? 5 : 1),
+    n: () => $('mon-note').focus(), t: () => $('mon-tag').focus(), ArrowLeft: () => frame(e.shiftKey ? -5 : -1), ArrowRight: () => frame(e.shiftKey ? 5 : 1),
     ArrowUp: () => step(-1), ArrowDown: () => step(1), Home: () => seek(0), End: () => seek(current()?.duration || 0),
   }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (!fn) return;

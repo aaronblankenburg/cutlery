@@ -211,9 +211,10 @@ class Runner:
     # ------------------------------------------------------------ models for the image analysis
 
     def fetch_vision_models(self, folder="/models/cutter-vision") -> list[str]:
-        """Download cutter's detection models (faces, objects, face recognition; 57 MB, checksums verified by
-        cutter) into the models tree, for the user the jobs run as. The analysis container cannot fetch them itself:
-        they are on GitHub, which the egress allowlist does not open (the agent shares it). Returns the files there."""
+        """Download cutter's analysis models (faces, objects, face recognition: 57 MB; CLIP for the content tags:
+        155 MB; checksums verified by cutter) into the models tree, for the user the jobs run as. The analysis
+        container cannot fetch all of them itself: some are on GitHub, which the egress allowlist does not open (the
+        agent shares it). Returns the files there."""
         have = []
         try:
             from cutter import image_analysis

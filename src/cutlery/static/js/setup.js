@@ -197,3 +197,21 @@ $('job-draft').addEventListener('click', async () => {
 
 await refreshState();
 setInterval(refreshState, 5000);
+
+// what the analysis looks at: saved at once, a change analyses the project again (only what is missing)
+const partsForm = $('parts-form');
+partsForm?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const boxes = [...partsForm.querySelectorAll('input[data-part]')];
+  const parts = boxes.filter((b) => b.checked).map((b) => b.dataset.part);
+  $('parts-status').textContent = '';
+  try {
+    const r = await api(`/api/projects/${project}/analysis/parts`, { method: 'PUT', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parts }) });
+    $('parts-count').textContent = t('parts.summary', { n: r.parts.length, all: boxes.length });
+    $('parts-status').textContent = r.changed ? t('parts.saved_again') : t('parts.saved');
+    refreshState();
+  } catch (err) {
+    $('parts-status').textContent = err.message;
+  }
+});

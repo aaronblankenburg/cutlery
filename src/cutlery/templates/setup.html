@@ -53,6 +53,16 @@
           <button class="button" type="button" id="analysis-stop" hidden>{{ t('footage.analysis.stop') }}</button>
         </div>
         <section id="analysis" hidden></section>
+        {% set chosen = st.analysis_parts %}
+        <details class="parts-choice" id="parts-box">
+          <summary>{{ t('parts.title') }} <span class="small muted" id="parts-count">{{ t('parts.summary', n=chosen|length, all=parts|length) }}</span></summary>
+          <form class="stack" id="parts-form" data-project="{{ project.id }}">
+            <p class="small muted">{{ t('parts.lead') }} {{ t('parts.change_note') }}</p>
+            {% include "_analysis_parts.html" %}
+            <div class="actions"><button class="button" type="submit">{{ t('parts.save') }}</button>
+              <span class="small muted" id="parts-status" aria-live="polite"></span></div>
+          </form>
+        </details>
         <div class="actions"><button class="button danger" type="button" id="clips-delete-all" hidden>{{ t('footage.delete_all') }}</button></div>
       </div>
     </section>

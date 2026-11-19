@@ -34,7 +34,16 @@
         <option value="none">{{ t('material.mark_none') }}</option>
       </select>
       <label class="check"><input type="checkbox" id="m-speech"> {{ t('material.speech_only') }}</label>
+      <div class="tag-filter">
+        <button type="button" id="m-tags-btn" aria-expanded="false" aria-controls="m-tags-pop">🏷 {{ t('material.tags') }} <span id="m-tags-n" class="tags-n"></span></button>
+        <div class="tag-pop" id="m-tags-pop" role="dialog" aria-label="{{ t('material.tags_filter') }}" hidden>
+          <label class="visually-hidden" for="m-tags-search">{{ t('material.tags_search') }}</label>
+          <input type="search" id="m-tags-search" placeholder="{{ t('material.tags_search') }}" autocomplete="off">
+          <div id="m-tags-list" class="tag-groups"></div>
+        </div>
+      </div>
     </div>
+    <div class="active-tags" id="m-active-tags" hidden></div>
     <div class="material-view">
       <span class="small muted" id="m-count"></span>
       <label class="small muted" for="m-size">{{ t('material.size') }}</label>
@@ -49,6 +58,20 @@
   <p class="muted" id="m-loading">{{ t('material.loading') }}</p>
   <div class="empty" id="m-empty" hidden>{{ t('material.none') }}</div>
   <div id="m-body"></div>
+  <datalist id="m-tag-names"></datalist>
+  <div class="select-bar" id="m-selbar" role="region" aria-label="{{ t('material.sel_region') }}" hidden>
+    <strong id="m-sel-n"></strong>
+    <form class="tag-add" id="m-sel-form">
+      <label class="visually-hidden" for="m-sel-tag">{{ t('material.tag_name') }}</label>
+      <input type="text" id="m-sel-tag" list="m-tag-names" maxlength="40" placeholder="{{ t('material.tag_placeholder') }}" autocomplete="off">
+      <button type="submit">🏷 {{ t('material.tag_add') }}</button>
+    </form>
+    <button type="button" id="m-sel-fav" class="mark-fav">★ {{ t('material.favorite') }}</button>
+    <button type="button" id="m-sel-rej">⊘ {{ t('material.reject') }}</button>
+    <span class="spacer"></span>
+    <button type="button" id="m-sel-clear">{{ t('material.sel_clear') }}</button>
+  </div>
+  <p class="small muted sel-hint" id="m-sel-hint" hidden>{{ t('material.sel_hint') }}</p>
 </div>
 
 <dialog class="monitor" id="monitor" aria-labelledby="mon-title">
@@ -57,6 +80,8 @@
     <div class="monitor-track" id="mon-track" title="{{ t('material.track_title') }}">
       <div class="mon-layer" id="mon-quality"></div>
       <div class="mon-layer" id="mon-selects"></div>
+      <div class="mon-layer" id="mon-tagl"></div>
+      <div class="mon-layer" id="mon-hl"></div>
       <div class="mon-range" id="mon-range" hidden></div>
       <div class="mon-head" id="mon-head"></div>
     </div>
@@ -86,6 +111,17 @@
     <p class="small" id="mon-meta"></p>
     <ul class="mon-list" id="mon-used"></ul>
     <ul class="mon-list" id="mon-marks"></ul>
+    <section class="mon-tags" aria-labelledby="mon-tags-h">
+      <h3 class="small" id="mon-tags-h">{{ t('material.tags') }}</h3>
+      <div class="tag-chips" id="mon-utags"></div>
+      <form class="tag-add" id="mon-tag-form">
+        <label class="visually-hidden" for="mon-tag">{{ t('material.tag_name') }}</label>
+        <input type="text" id="mon-tag" list="m-tag-names" maxlength="40" placeholder="{{ t('material.tag_placeholder_t') }}" autocomplete="off">
+        <button type="submit">{{ t('material.tag_add') }}</button>
+      </form>
+      <p class="small muted" id="mon-tag-scope"></p>
+      <div id="mon-atags" class="tag-groups"></div>
+    </section>
     <h3 class="small">{{ t('material.transcript') }}</h3>
     <div class="mon-transcript" id="mon-transcript"></div>
   </aside>

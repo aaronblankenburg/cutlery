@@ -1,0 +1,14 @@
+{# The parts of the analysis to choose: checkboxes part_<name>; `chosen` holds the ticked ones. #}
+<input type="hidden" name="parts_sent" value="1">
+<div class="parts-options">
+  <label class="part-option part-fixed">
+    <input type="checkbox" checked disabled>
+    <span><strong>{{ t('parts.quality') }}</strong><br><span class="small muted">{{ t('parts.quality_hint') }}</span></span>
+  </label>
+  {% for x in parts %}
+  <label class="part-option">
+    <input type="checkbox" name="part_{{ x }}" value="1" data-part="{{ x }}" {% if x in chosen %}checked{% endif %}>
+    <span><strong>{{ t('parts.' + x) }}</strong><br><span class="small muted">{{ t('parts.' + x + '_hint') }}</span></span>
+  </label>
+  {% endfor %}
+</div>

@@ -243,7 +243,7 @@ def test_vision_models_are_fetched_by_the_runner_for_the_job_user(runner, tmp_pa
     monkeypatch.setattr(image_analysis, "model_file", fake_model_file)
     monkeypatch.setattr(os, "chown", lambda *a: None)
     have = runner.fetch_vision_models(str(folder))
-    assert fetched == list(image_analysis.MODELS) and len(have) == 3
+    assert fetched == list(image_analysis.MODELS) and len(have) == len(image_analysis.MODELS)
     assert runner.vision_done.is_set()
 
 

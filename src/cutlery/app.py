@@ -190,12 +190,16 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
     async def new_project(request):
         if request.method == "POST":
             form = await read_form(request)
+            parts = ([x for x in cutter_project.ANALYSIS_PARTS if form.get(f"part_{x}")]
+                     if form.get("parts_sent") else None)
             try:
-                p = projects.create(str(form.get("name", "")), str(form.get("frame") or "") or None)
+                p = projects.create(str(form.get("name", "")), str(form.get("frame") or "") or None, parts)
             except ValueError:
-                return page(request, "project_new.html", error="new.name_missing", frames=cutter_project.FRAMES)
+                return page(request, "project_new.html", error="new.name_missing", frames=cutter_project.FRAMES,
+                            parts=cutter_project.ANALYSIS_PARTS, chosen=parts or cutter_project.ANALYSIS_PARTS)
             return RedirectResponse(f"/projects/{p['id']}/setup", status_code=303)
-        return page(request, "project_new.html", error=None, frames=cutter_project.FRAMES)
+        return page(request, "project_new.html", error=None, frames=cutter_project.FRAMES,
+                    parts=cutter_project.ANALYSIS_PARTS, chosen=cutter_project.ANALYSIS_PARTS)
 
     async def export_page(request):
         p = project_or_404(request.path_params["pid"])
@@ -436,7 +440,8 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         form = await read_form(request)
         if form.get("confirm") != p["name"]:
             st = await anyio.to_thread.run_sync(overview.state, projects, worker, jobs, reviews, p)
-            return page(request, "setup.html", project=p, st=st, delete_error=True, frames=cutter_project.FRAMES)
+            return page(request, "setup.html", project=p, st=st, delete_error=True, frames=cutter_project.FRAMES,
+                        parts=cutter_project.ANALYSIS_PARTS)
         await anyio.to_thread.run_sync(jobs.cancel_project, p["id"])
         await anyio.to_thread.run_sync(reviews.forget, p["id"])
         await anyio.to_thread.run_sync(worker.cancel, p["id"])
@@ -526,6 +531,22 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         log.info("project %s: %d clip(s) deleted", p["id"], n)
         return JSONResponse({"deleted": n})
 
+    async def api_analysis_parts(request):
+        """GET/PUT the parts of the analysis; a change analyses the project again (cutter adds what is missing)."""
+        p = project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        if request.method == "PUT":
+            body = await read_json(request)
+            try:
+                changed = await anyio.to_thread.run_sync(cutter_project.set_analysis_parts, paths, body.get("parts"))
+            except ValueError as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+            await anyio.to_thread.run_sync(cutter_project.write, paths, p["name"])
+            if changed and await anyio.to_thread.run_sync(projects.clips, p["id"]):
+                worker.request(p["id"])
+            return JSONResponse({"parts": cutter_project.analysis_parts(paths), "changed": changed})
+        return JSONResponse({"parts": cutter_project.analysis_parts(paths), "all": list(cutter_project.ANALYSIS_PARTS)})
+
     async def api_analysis_start(request):
         p = project_or_404(request.path_params["pid"])
         worker.request(p["id"])
@@ -590,6 +611,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/api/status", api_status),
         Route("/api/projects/{pid}/analysis", api_analysis),
         Route("/api/projects/{pid}/analysis", api_analysis_start, methods=["POST"]),
+        Route("/api/projects/{pid}/analysis/parts", api_analysis_parts, methods=["GET", "PUT"]),
         Route("/api/projects/{pid}/clips", api_clips, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/clips", api_clips_delete, methods=["DELETE"]),
         Route("/api/projects/{pid}/clips/{cid}", api_clips_delete, methods=["DELETE"]),

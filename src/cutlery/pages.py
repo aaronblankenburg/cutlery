@@ -56,7 +56,8 @@ def routes(c: Context):
     async def setup_page(request):
         p = c.project_or_404(request.path_params["pid"])
         st = await state_of(p)
-        return c.page(request, "setup.html", project=p, st=st, frames=cutter_project.FRAMES)
+        return c.page(request, "setup.html", project=p, st=st, frames=cutter_project.FRAMES,
+                      parts=cutter_project.ANALYSIS_PARTS)
 
     async def footage_redirect(request):
         return RedirectResponse(f"/projects/{request.path_params['pid']}/setup", status_code=301)
@@ -116,6 +117,11 @@ def routes(c: Context):
         return JSONResponse(await anyio.to_thread.run_sync(material.transcript, projects.paths(p["id"]),
                                                            request.path_params["cid"]))
 
+    async def api_material_tags(request):
+        p = c.project_or_404(request.path_params["pid"])
+        return JSONResponse(await anyio.to_thread.run_sync(material.detail, projects.paths(p["id"]),
+                                                           request.path_params["cid"]))
+
     async def selectable(p):
         known = await known_clips(p)
         clips = await anyio.to_thread.run_sync(cutter_project.clips_json, projects.paths(p["id"]))
@@ -126,8 +132,13 @@ def routes(c: Context):
         paths = projects.paths(p["id"])
         if request.method == "POST":
             body = await c.read_json(request)
+            many = isinstance(body, dict) and "items" in body          # several at once: {"items": [entry, …]}
             try:
-                s = await anyio.to_thread.run_sync(material.add, paths, body, await selectable(p))
+                if many:
+                    s = {"selects": await anyio.to_thread.run_sync(material.add_many, paths, body["items"],
+                                                                   await selectable(p))}
+                else:
+                    s = await anyio.to_thread.run_sync(material.add, paths, body, await selectable(p))
             except material.SelectError as e:
                 return JSONResponse({"error": str(e)}, status_code=422)
             await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
@@ -370,6 +381,7 @@ def routes(c: Context):
         Route("/projects/{pid}/material", material_page),
         Route("/api/projects/{pid}/material", api_material),
         Route("/api/projects/{pid}/material/{cid}/transcript", api_material_transcript),
+        Route("/api/projects/{pid}/material/{cid}/tags", api_material_tags),
         Route("/api/projects/{pid}/selects", api_selects, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/selects/{sid}", api_select, methods=["PATCH", "DELETE"]),
         Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),

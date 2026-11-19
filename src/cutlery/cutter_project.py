@@ -18,6 +18,8 @@ from .storage import ProjectPaths, write_atomic
 EXPORT_HEIGHT = 360
 FRAMES = tuple(FORMATS)                 # 16:9, 9:16, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9 (cutter docs/formats.md, Frames)
 DEFAULT_FRAME = "16:9"
+# what the analysis looks at besides the picture quality (cutter docs/formats.md, [analysis] parts)
+ANALYSIS_PARTS = ("transcripts", "faces", "objects", "tags", "sound", "scenes")
 
 
 def analysis_dir(paths: ProjectPaths) -> pathlib.Path:
@@ -60,6 +62,28 @@ def set_frame(paths: ProjectPaths, value: str) -> bool:
     return value != old
 
 
+def analysis_parts(paths: ProjectPaths) -> list[str]:
+    """The parts of the analysis the user chose for the project (all when never chosen)."""
+    v = _settings(paths).get("analysis_parts")
+    if not isinstance(v, list):
+        return list(ANALYSIS_PARTS)
+    return [x for x in ANALYSIS_PARTS if x in v]
+
+
+def set_analysis_parts(paths: ProjectPaths, parts) -> bool:
+    """Store the chosen parts (cutlery.json; cutter.toml [analysis] parts). Returns whether they changed."""
+    if not isinstance(parts, (list, tuple, set)) or not all(isinstance(x, str) for x in parts):
+        raise ValueError("parts: a list of names")
+    bad = set(parts) - set(ANALYSIS_PARTS)
+    if bad:
+        raise ValueError(f"unknown parts: {', '.join(sorted(bad))}")
+    new = [x for x in ANALYSIS_PARTS if x in parts]
+    old = _settings(paths).get("analysis_parts")
+    write_atomic(paths.data / "cutlery.json",
+                 (json.dumps(dict(_settings(paths), analysis_parts=new), indent=1) + "\n").encode("utf-8"))
+    return new != (old if isinstance(old, list) else list(ANALYSIS_PARTS))
+
+
 def render(paths: ProjectPaths, title: str, language: str = "") -> str:
     """cutter.toml for the project. Paths are absolute, so cutter needs no knowledge of the two trees."""
     a = analysis_dir(paths)
@@ -92,6 +116,10 @@ def render(paths: ProjectPaths, title: str, language: str = "") -> str:
         # the picture format of the cuts; a cut's edit.json "frame" wins (cuts made before a change keep theirs)
         "[timeline]",
         f"frame = {q(frame(paths))}",
+        "",
+        # what the analysis looks at (chosen by the user; picture quality and camera moves always)
+        "[analysis]",
+        f"parts = {q(analysis_parts(paths))}",
         "",
         # renders on the server come from the 360p stand-ins: render at that size, not upscaled (the film in full
         # resolution is made from the originals on the user's computer, see the export)

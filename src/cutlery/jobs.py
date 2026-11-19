@@ -53,8 +53,9 @@ PROMPTS = {
              "FilmCraft export and `cutter review-data {cut}`."),
 }
 SELECTS = (" The user viewed the footage and chose: selects.json (and the section about it in briefing.md) lists "
-           "favourites and rejects, for whole clips or ranges. Use the favourites where they fit the story, leave the "
-           "rejects out, and record in decisions.json where you did not follow the selection and why.")
+           "favourites and rejects, for whole clips or ranges, and the user's own tags for clips and ranges. Use the "
+           "favourites where they fit the story, leave the rejects out, read a tag named in the briefing or a comment "
+           "as those clips, and record in decisions.json where you did not follow the selection and why.")
 EGRESS = (" Internet access goes through an allowlist; a host it refuses (HTTP 403 \"Forbidden by Cutlery egress "
           "allowlist\") is shown to the user, who may allow it while you work: if you need it, go on with other steps "
           "and try again a few times over the next minutes (wait with sleep 60 between tries, at most 10 minutes); "

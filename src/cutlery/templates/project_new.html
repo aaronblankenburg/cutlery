@@ -26,6 +26,11 @@
       {% endfor %}
     </div>
   </fieldset>
+  <details class="parts-choice">
+    <summary>{{ t('parts.title') }} <span class="small muted">{{ t('parts.summary', n=chosen|length, all=parts|length) }}</span></summary>
+    <p class="small muted">{{ t('parts.lead') }}</p>
+    {% include "_analysis_parts.html" %}
+  </details>
   {% if error %}<div class="notice error">{{ t(error) }}</div>{% endif %}
   <div><button class="button primary" type="submit">{{ t('new.create') }}</button></div>
 </form>

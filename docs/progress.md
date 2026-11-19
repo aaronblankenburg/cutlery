@@ -176,6 +176,24 @@ milestone (and before any model switch), so a fresh session can continue without
 - 0.2.9 (2026-11-19), cutter 0.7.0: project format (16:9 film, 9:16 reel, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9),
   reframing onto faces and people; see "Formats" below.
 
+## Tags and analysis parts (branches `tags` in cutter and Cutlery, not merged yet, 2026-11-19)
+
+Asked for 2026-11-19 ("alle Tags anzeigen, eigene vergeben – ganzer Clip oder Abschnitt", "CLIP automatisch laden",
+"Nutzer wählt, was die Analyse auswertet", "für Namibia nachziehen").
+- cutter (branch `tags`): content_tags.py – CLIP ViT-B/32 as quantized ONNX (Xenova, 155 MB, in image_analysis.MODELS,
+  so the runner fetches it with the other models; no torch), a pass of its own after the image analysis (ffmpeg, one
+  224 px frame a second), tags per second into analysis/image/<ID>.json with `tags_key` (model + lists), summary,
+  quality.txt `content` line; about 10x real time on the server (Namibia: 1925 s of footage in 185 s). Default list
+  extended for travel films (gravel road, savanna, river, campfire, camp, aerial …). `[analysis] parts` /
+  `--parts` (transcripts, faces, objects, tags, sound, scenes); each clip file records its `parts`, a part added later
+  analyses those clips again (tags: only the tag pass). selects.json `kind: "tag"` with `tag`; skill reads them.
+- Cutlery: the parts on "new project" and on the setup page (PUT /api/projects/<id>/analysis/parts, a change runs the
+  analysis); material page: tiles show own tags (accent) and content tags, tag filter popover (my tags, in the
+  picture, things, camera moves; counts, search, AND), monitor: own tags with range (T, I/O), found tags with
+  seconds (hover shows them on the bar, click jumps), several clips with Ctrl/Shift-click or the tile box and a bar
+  to tag / favourite / reject them at once (POST selects {"items": […]}, same tag not twice); briefing.md
+  "My tags"; job prompt mentions them. Labels for content tags, COCO objects and moves in en/de.
+
 ## Formats: Reels and other shapes (0.2.9, cutter 0.7.0, 2026-11-19)
 
 Asked for 2026-11-19 ("Reels genauso wie hochkant", "mehr gängige Formate"); decided: reels are their own projects.
