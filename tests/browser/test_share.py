@@ -47,6 +47,13 @@ def test_share_with_a_friend(page, server, clips):
     page.wait_for_selector("#share-made:not([hidden])")
     link = page.input_value("#share-url")
     assert "/s/" in link and page.locator("#share-table tbody tr").count() == 1
+    # shown again from the list
+    page.reload()
+    page.wait_for_selector("#share-table tbody tr")
+    assert page.is_hidden("#share-made")
+    page.click("#share-table tbody tr .share-actions .button:not(.danger)")
+    page.wait_for_selector("#share-made:not([hidden])")
+    assert page.input_value("#share-url") == link
 
     # the friend: another browser without the login
     guest_ctx = page.context.browser.new_context()
@@ -90,7 +97,7 @@ def test_share_with_a_friend(page, server, clips):
     # the owner sees the suggestion and takes it over
     page.goto(f"{server['url']}/projects/{pid}/material")
     page.wait_for_selector("#m-sugg:not([hidden])")
-    assert "Alex" in page.inner_text("#m-sugg") and "💡 1" in page.inner_text(".tile[data-id=C001] .tile-badges")
+    assert "Alex" in page.inner_text("#m-sugg") and page.inner_text(".tile[data-id=C001] .badge.sugg").strip() == "1"
     page.click(".tile[data-id=C001]")
     page.wait_for_selector("#mon-sugg li.mark")
     page.click("#mon-sugg li.mark .ok")

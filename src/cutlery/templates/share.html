@@ -25,7 +25,8 @@
       <div class="share-made" id="share-made" hidden>
         <p><strong id="share-made-title"></strong></p>
         <div class="share-url"><input type="text" id="share-url" readonly aria-label="{{ t('share.link') }}">
-          <button class="button" type="button" id="share-copy">{{ t('share.copy') }}</button></div>
+          <button class="button" type="button" id="share-copy">{{ t('share.copy') }}</button>
+          <button class="button" type="button" id="share-send" hidden>{{ t('share.send') }}</button></div>
         <p class="small muted">{{ t('share.once') }}</p>
       </div>
     </form>
@@ -43,12 +44,13 @@
   <aside class="col-side">
     <section class="card stack small">
       <h2>{{ t('share.can_title') }}</h2>
-      <ul class="plain-list">
-        <li>✓ {{ t('share.can.review') }}</li>
-        <li>✓ {{ t('share.can.comment') }}</li>
-        <li>✓ {{ t('share.can.material') }}</li>
-        <li>✓ {{ t('share.can.suggest') }}</li>
-        <li>✗ {{ t('share.cannot') }}</li>
+      <ul class="plain-list icon-list">
+        <li class=\"yes\">{{ icon('check') }}<span>{{ t('share.can.review') }}</span></li>
+        <li class=\"yes\">{{ icon('check') }}<span>{{ t('share.can.comment') }}</span></li>
+        <li class=\"yes\">{{ icon('check') }}<span>{{ t('share.can.material') }}</span></li>
+        <li class=\"yes\">{{ icon('check') }}<span>{{ t('share.can.suggest') }}</span></li>
+        <li class=\"yes\">{{ icon('check') }}<span>{{ t('share.can.status') }}</span></li>
+        <li class="no">{{ icon('x') }}<span>{{ t('share.cannot') }}</span></li>
       </ul>
       <p class="muted">{{ t('share.notify') }}</p>
     </section>

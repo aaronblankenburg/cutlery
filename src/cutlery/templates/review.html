@@ -12,7 +12,7 @@
   <span class="actions">
     <button class="button primary" type="button" id="review-done" hidden></button>
     {% if guest %}<a class="button" href="/projects/{{ project.id }}/material">{{ t('guest.to_material') }}</a>
-    {% else %}<a class="button" href="/projects/{{ project.id }}/export">{{ t('review.to_export') }}</a>{% endif %}
+    {% else %}<a class="button" href="/projects/{{ project.id }}/export">{{ t('review.to_export')|arrows }}</a>{% endif %}
   </span>
   <div class="next-note" id="next-note" hidden>
     <label class="visually-hidden" for="next-note-text" id="next-note-label"></label>

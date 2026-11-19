@@ -175,6 +175,14 @@ milestone (and before any model switch), so a fresh session can continue without
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
 - 0.2.9 (2026-11-19), cutter 0.7.0: project format (16:9 film, 9:16 reel, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9),
   reframing onto faces and people; see "Formats" below.
+- 0.4.3 (2026-11-19), cutter 0.8.1: links shown and passed on again. The secret of a share link is now an HMAC of
+  its id under DATA/share.key (made on first use, mode 600); the database still holds only its hash, so "Show link"
+  (GET /api/projects/<id>/shares/<sid>/link) can make it again, and "Share …" uses the system share sheet where there
+  is one. Links from before (random secret, "derived" 0, migration 009) cannot be shown; "Renew" (POST …/link) puts a
+  new one in their place (same name and expiry, the old one revoked). Icons: every symbol next to text on a button,
+  link, badge or hint is an inline SVG from static/img/icons.svg (Jinja icon(), JS icons.js; cutter's review player
+  has the same in app.js ICONS) instead of a text glyph from whichever fallback font has it, sized to the text and
+  centred by flex; search inputs styled like the others; table cells and the size label centred.
 - 0.4.2 (2026-11-19): a guest also sees the status page, read only: job and log (events also under
   /api/projects/<id>/jobs/<jid>/events, checked against the project), analysis facts, people's names (no inputs, no
   merging, /people API still refused), internet access (no answers), project memory (no editing); no resume, cancel

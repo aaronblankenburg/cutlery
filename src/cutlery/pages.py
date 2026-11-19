@@ -171,6 +171,21 @@ def routes(c: Context):
             return JSONResponse(dict(row, url=share_url(request, token)), status_code=201)
         return JSONResponse({"shares": await anyio.to_thread.run_sync(c.shares.list, p["id"])})
 
+    async def api_share_link(request):
+        """An active link again (GET), or a new one in its place (POST: renew; the old one stops working)."""
+        p = c.project_or_404(request.path_params["pid"])
+        sid = request.path_params["sid"]
+        try:
+            if request.method == "POST":
+                row, token = await anyio.to_thread.run_sync(c.shares.renew, p["id"], sid)
+                return JSONResponse(dict(row, url=share_url(request, token)), status_code=201)
+            token = await anyio.to_thread.run_sync(c.shares.token, p["id"], sid)
+        except LookupError:
+            return JSONResponse({"error": "not found"}, status_code=404)
+        except share_mod.ShareError as e:
+            return JSONResponse({"error": str(e)}, status_code=409)
+        return JSONResponse({"url": share_url(request, token)})
+
     async def api_share(request):
         p = c.project_or_404(request.path_params["pid"])
         if not await anyio.to_thread.run_sync(c.shares.revoke, p["id"], request.path_params["sid"]):
@@ -522,6 +537,7 @@ def routes(c: Context):
         Route("/projects/{pid}/share", share_page),
         Route("/api/projects/{pid}/shares", api_shares, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/shares/{sid}", api_share, methods=["DELETE"]),
+        Route("/api/projects/{pid}/shares/{sid}/link", api_share_link, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/review/note", api_review_note, methods=["GET", "PUT"]),
         Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),
         Route("/projects/{pid}/analysis/{kind}/{name}", analysis_file),

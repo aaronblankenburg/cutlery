@@ -92,6 +92,30 @@ class TestLink:
         assert g.patch(f"{api}/entries/{mine['id']}", json={"text": "gekapert"}).status_code in (403, 409)
         assert g.delete(f"{api}/entries/{mine['id']}").status_code in (403, 409)
 
+    def test_a_link_can_be_shown_again_and_renewed(self, app, client, cfg, guest_link):
+        pid, other, link = guest_link
+        sid = client.get(f"/api/projects/{pid}/shares").json()["shares"][0]["id"]
+        again = client.get(f"/api/projects/{pid}/shares/{sid}/link").json()["url"]
+        assert again.endswith(link) and (cfg.data_dir / "share.key").stat().st_mode & 0o777 == 0o600
+        assert client.get(f"/api/projects/{other}/shares/{sid}/link").status_code == 404
+        g, _ = as_guest(app, link)
+        assert g.get(f"/api/projects/{pid}/shares/{sid}/link").status_code == 403         # not the guest's
+        # a link from before 0.4.3 (a random secret, only its hash): not shown again, but renewed
+        from cutlery.db import Database
+        db = Database(cfg.database)
+        with db.tx() as con:
+            con.execute("UPDATE shares SET derived=0, token_hash='x' WHERE id=?", (sid,))
+        assert client.get(f"/api/projects/{pid}/shares/{sid}/link").status_code == 409
+        assert client.get(f"/api/projects/{pid}/shares").json()["shares"][0]["derived"] is False
+        r = client.post(f"/api/projects/{pid}/shares/{sid}/link")
+        assert r.status_code == 201 and r.json()["name"] == "Alex" and r.json()["derived"]
+        rows = client.get(f"/api/projects/{pid}/shares").json()["shares"]
+        assert [(x["name"], x["active"]) for x in rows] == [("Alex", False), ("Alex", True)]
+        g2, _ = as_guest(app, r.json()["url"][len("http://testserver"):])
+        assert g2.get(f"/projects/{pid}/review").status_code == 200
+        assert client.get(f"/api/projects/{pid}/shares/{r.json()['id']}/link").json()["url"] == r.json()["url"]
+        assert client.post(f"/api/projects/{pid}/shares/{sid}/link").status_code == 409      # revoked by now
+
     def test_withdrawn_and_unknown_links(self, app, client, guest_link):
         pid, _, link = guest_link
         g, _ = as_guest(app, link)

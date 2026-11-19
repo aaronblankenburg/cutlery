@@ -3,6 +3,7 @@
 // cut, which can be written (and is saved) all through the review.
 // The frame tells the page which cut is shown (postMessage {source: 'cutter-review', cut, open}).
 import { load, t } from './i18n.js';
+import { arrowText } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 const project = $('review').dataset.project;
@@ -53,7 +54,7 @@ function render() {
   const isNewest = cut === newest;
   const done = $('review-done');
   done.hidden = !isNewest || cut.locked || !!guest;
-  done.textContent = t('review.done', { n: num(cut.id) + 1 });
+  arrowText(done, t('review.done', { n: num(cut.id) + 1 }));
   $('next-note').hidden = !isNewest || cut.locked || !!guest;
   $('next-note-label').textContent = t('review.note_label', { n: num(cut.id) + 1 });
   $('next-note-text').placeholder = t('review.note_placeholder', { n: num(cut.id) + 1 });

@@ -123,7 +123,7 @@ main { max-width: 1120px; margin: 0 auto; padding: var(--space-6) var(--space-6)
 .button.danger { color: var(--error-fg); }
 .button:disabled { opacity: .5; cursor: not-allowed; }
 label { display: block; font-weight: 500; margin-bottom: 6px; }
-input[type=text], input[type=password], textarea, select {
+input[type=text], input[type=password], input[type=search], textarea, select {
   width: 100%; min-height: var(--tap); padding: 10px 12px; border-radius: var(--radius-md);
   border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text);
 }
@@ -392,6 +392,7 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
   border: 1px solid var(--border-strong); background: var(--surface-3); color: var(--text-muted);
   font-size: 20px; line-height: 1; cursor: pointer; transition: color .15s, background .15s, border-color .15s;
 }
+.card-delete .ico { width: 16px; height: 16px; }
 .card-delete:hover, .card-delete:focus-visible { color: var(--error-fg); border-color: var(--error-fg); background: var(--surface-2); }
 .clip-card header { display: flex; flex-direction: column; gap: 2px; margin: 0; }
 .clip-card h2 { font-size: 16px; }
@@ -434,6 +435,7 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
   width: 48px; height: 48px; border-radius: 50%; cursor: pointer; }
 .lightbox button:hover, .lightbox button:focus-visible { background: rgb(0 0 0 / 0.8); }
 .lightbox-close { top: 16px; right: 16px; }
+.lightbox-close .ico { width: 26px; height: 26px; }
 .lightbox-nav.prev { left: 16px; top: 50%; transform: translateY(-50%); }
 .lightbox-nav.next { right: 16px; top: 50%; transform: translateY(-50%); }
 
@@ -520,7 +522,9 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .tile-name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-soft); }
 .tile-badges { display: flex; flex-wrap: wrap; gap: 4px; min-height: 0; }
 .badge { padding: 0 6px; border-radius: var(--radius-pill); background: var(--surface-3); font-size: 12px; color: var(--text-soft);
-  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px; min-height: 20px; }
+.badge > span { overflow: hidden; text-overflow: ellipsis; }
 .badge.used { color: var(--info-fg); }
 .badge.fav { color: var(--accent); }
 .badge.rej { color: var(--error-fg); }
@@ -568,7 +572,7 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
   min-height: 0; overflow: auto; }
 .monitor-head { display: flex; align-items: flex-start; gap: var(--space-2); }
 .monitor-head h2 { flex: 1; margin: 0; font-size: 15px; overflow-wrap: anywhere; }
-.monitor .close { min-height: 32px; padding: 0 10px; font-size: 18px; }
+.monitor .close { min-height: 32px; padding: 0 9px; }
 .mon-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
 .mon-list .mark { display: flex; align-items: center; gap: 6px; }
 .mon-list .mark input { flex: 1; min-width: 0; min-height: 32px; padding: 2px 8px; }
@@ -619,7 +623,9 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .tag-chip.k-u { border-style: solid; }
 .tag-chip.k-c, .tag-chip.k-o, .tag-chip.k-m { border-style: dashed; }
 .tag-chip.k-u.on, .monitor .tag-chip.k-u { color: var(--accent); border-color: var(--accent); border-style: solid; }
-.tag-chip .x { font-size: 15px; line-height: 1; }
+.tag-chip .x { display: inline-flex; align-items: center; justify-content: center; }
+.tag-chip .x .ico { width: 14px; height: 14px; }
+.monitor .tag-pair .tag-hide .ico { width: 14px; height: 14px; }
 .monitor .tag-chip.k-u { padding: 0 2px 0 0; cursor: default; }
 .monitor .tag-chip .tag-go, .monitor .tag-chip .x { min-height: 28px; padding: 0 8px; border: 0; background: none; color: inherit; }
 .active-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -718,3 +724,27 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .mon-list .mark.suggested .mark-label { white-space: normal; text-align: left; }
 .tag-chip.suggested { border-style: dashed !important; }
 .mon-list .mark .ok { min-height: 32px; padding: 0 10px; }
+.share-actions { white-space: nowrap; text-align: right; }
+.share-actions .button + .button { margin-left: 6px; }
+
+/* icons (static/img/icons.svg): drawn on a 24 px grid for a 2 px line, sized to the text next to them and centred
+   on it by flex – never a text glyph, whose height and baseline depend on the font that happens to have it */
+.ico { width: 1.15em; height: 1.15em; flex: none; display: inline-block; vertical-align: -0.2em; overflow: visible;
+  fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+:where(button, .button, a, .go, li, .ico-text, .sugg-who, #m-sel-n, #mon-keys):has(> .ico) {
+  display: inline-flex; align-items: center; gap: .4em; }
+:where(button, .button):has(> .ico:only-child) { justify-content: center; }
+.monitor-controls button:has(> .ico:only-child) { width: 40px; padding: 0; }
+.icon-list li { display: flex; align-items: flex-start; gap: .5em; }
+.icon-list li > .ico { margin-top: .17em; }              /* on the first line of a text that wraps */
+.icon-list li.yes > .ico { color: var(--ok-fg); }
+.icon-list li.no > .ico { color: var(--error-fg); }
+.marks-cell .ico { margin-right: 4px; }
+.marks-cell .fav { color: var(--accent); }
+.marks-cell .rej { color: var(--error-fg); }
+.sugg-who { margin-right: auto; }
+.sugg-who > .ico, .badge.sugg > .ico { color: var(--accent); }
+#share-table td { vertical-align: middle; }
+.share-made .share-url + p { margin-top: var(--space-2); }
+.material-view label { margin: 0; }
+table.clips td { vertical-align: middle; }

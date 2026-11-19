@@ -38,7 +38,7 @@
       </select>
       <label class="check"><input type="checkbox" id="m-speech"> {{ t('material.speech_only') }}</label>
       <div class="tag-filter">
-        <button type="button" id="m-tags-btn" aria-expanded="false" aria-controls="m-tags-pop">🏷 {{ t('material.tags') }} <span id="m-tags-n" class="tags-n"></span></button>
+        <button type="button" id="m-tags-btn" aria-expanded="false" aria-controls="m-tags-pop">{{ icon('tag') }}<span>{{ t('material.tags') }}</span><span id="m-tags-n" class="tags-n"></span></button>
         <div class="tag-pop" id="m-tags-pop" role="dialog" aria-label="{{ t('material.tags_filter') }}" hidden>
           <label class="visually-hidden" for="m-tags-search">{{ t('material.tags_search') }}</label>
           <div class="tag-pop-head">
@@ -72,11 +72,11 @@
     <form class="tag-add" id="m-sel-form">
       <label class="visually-hidden" for="m-sel-tag">{{ t('material.tag_name') }}</label>
       <input type="text" id="m-sel-tag" list="m-tag-names" maxlength="40" placeholder="{{ t('material.tag_placeholder') }}" autocomplete="off">
-      <button type="submit">🏷 {{ t('material.tag_add') }}</button>
+      <button type="submit">{{ icon('tag') }}<span>{{ t('material.tag_add') }}</span></button>
       <button type="button" id="m-sel-untag">{{ t('material.sel_untag') }}</button>
     </form>
-    <button type="button" id="m-sel-fav" class="mark-fav">★ {{ t('material.favorite') }}</button>
-    <button type="button" id="m-sel-rej">⊘ {{ t('material.reject') }}</button>
+    <button type="button" id="m-sel-fav" class="mark-fav">{{ icon('star') }}<span>{{ t('material.favorite') }}</span></button>
+    <button type="button" id="m-sel-rej">{{ icon('ban') }}<span>{{ t('material.reject') }}</span></button>
     <span class="spacer"></span>
     <button type="button" id="m-sel-clear">{{ t('material.sel_clear') }}</button>
   </div>
@@ -96,9 +96,9 @@
       <div class="mon-head" id="mon-head"></div>
     </div>
     <div class="monitor-controls">
-      <button type="button" id="mon-prev" title="{{ t('material.prev_clip') }}">↑</button>
-      <button type="button" id="mon-play" title="{{ t('material.play') }}">▶</button>
-      <button type="button" id="mon-next" title="{{ t('material.next_clip') }}">↓</button>
+      <button type="button" id="mon-prev" title="{{ t('material.prev_clip') }}" aria-label="{{ t('material.prev_clip') }}">{{ icon('arrow-up') }}</button>
+      <button type="button" id="mon-play" title="{{ t('material.play') }}" aria-label="{{ t('material.play') }}">{{ icon('play') }}</button>
+      <button type="button" id="mon-next" title="{{ t('material.next_clip') }}" aria-label="{{ t('material.next_clip') }}">{{ icon('arrow-down') }}</button>
       <span class="mono small" id="mon-time">0:00.0</span>
       <span class="small muted" id="mon-range-text"></span>
       <span class="spacer"></span>
@@ -106,8 +106,8 @@
       <button type="button" id="mon-out" title="{{ t('material.out_title') }}">{{ t('material.out') }}</button>
     </div>
     <div class="monitor-mark">
-      <button type="button" class="mark-fav" id="mon-fav">★ {{ t('material.favorite') }}</button>
-      <button type="button" class="mark-rej" id="mon-rej">⊘ {{ t('material.reject') }}</button>
+      <button type="button" class="mark-fav" id="mon-fav">{{ icon('star') }}<span>{{ t('material.favorite') }}</span></button>
+      <button type="button" class="mark-rej" id="mon-rej">{{ icon('ban') }}<span>{{ t('material.reject') }}</span></button>
       <label class="visually-hidden" for="mon-note">{{ t('material.note') }}</label>
       <input type="text" id="mon-note" maxlength="500" placeholder="{{ t('material.note_placeholder') }}">
     </div>
@@ -116,7 +116,7 @@
   <aside class="monitor-side">
     <div class="monitor-head">
       <h2 id="mon-title" class="mono"></h2>
-      <button type="button" class="close" id="mon-close" aria-label="{{ t('material.close') }}">×</button>
+      <button type="button" class="close" id="mon-close" aria-label="{{ t('material.close') }}">{{ icon('x') }}</button>
     </div>
     <p class="small" id="mon-meta"></p>
     <ul class="mon-list" id="mon-used"></ul>

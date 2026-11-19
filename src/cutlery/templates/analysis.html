@@ -8,7 +8,7 @@
     <h1>{{ t('analysis.page_title') }}</h1>
     <p>{{ t('analysis.page_lead') }}</p>
   </div>
-  <div class="actions"><a class="button" href="/projects/{{ project.id }}">← {{ t('project.nav.status') }}</a></div>
+  <div class="actions"><a class="button" href="/projects/{{ project.id }}">{{ icon('arrow-left') }}<span>{{ t('project.nav.status') }}</span></a></div>
 </div>
 
 {% if not clips %}
@@ -38,9 +38,9 @@
       <span class="small">{{ c.rel_path }}</span>
       <span class="small muted"><span class="js-duration" data-seconds="{{ c.duration or 0 }}"></span>{% if c.created %} · {{ c.created[:16] }}{% endif %}{% if c.device %} · {{ c.device }}{% endif %}</span>
       <button class="button small-button js-play" type="button" data-src="/projects/{{ project.id }}/analysis/clip/{{ c.id }}.mp4"
-              data-target="media-{{ c.id }}" aria-label="{{ t('analysis.play_clip', id=c.id) }}">▶ {{ t('analysis.play') }}</button>
+              data-target="media-{{ c.id }}" aria-label="{{ t('analysis.play_clip', id=c.id) }}">{{ icon('play') }}<span>{{ t('analysis.play') }}</span></button>
       <button class="card-delete js-delete" type="button" data-clip="{{ c.clip_id }}" data-name="{{ c.rel_path }}"
-              aria-label="{{ t('footage.delete_clip', name=c.rel_path) }}" title="{{ t('footage.delete') }}">×</button>
+              aria-label="{{ t('footage.delete_clip', name=c.rel_path) }}" title="{{ t('footage.delete') }}">{{ icon('x') }}</button>
     </header>
     <div class="clip-media" id="media-{{ c.id }}"></div>
     {% if c.sheet %}<a class="js-lightbox" data-group="sheets" data-caption="{{ c.id }} · {{ c.rel_path }}" href="/projects/{{ project.id }}/analysis/sheets/{{ c.id }}.jpg" target="_blank" rel="noopener">
@@ -64,7 +64,7 @@
   <figure><img id="lightbox-img" alt=""><figcaption id="lightbox-caption" class="small"></figcaption></figure>
   <button class="lightbox-nav prev" type="button" id="lightbox-prev" aria-label="{{ t('analysis.lightbox.prev') }}">‹</button>
   <button class="lightbox-nav next" type="button" id="lightbox-next" aria-label="{{ t('analysis.lightbox.next') }}">›</button>
-  <button class="lightbox-close" type="button" id="lightbox-close" aria-label="{{ t('analysis.lightbox.close') }}">×</button>
+  <button class="lightbox-close" type="button" id="lightbox-close" aria-label="{{ t('analysis.lightbox.close') }}">{{ icon('x') }}</button>
 </dialog>
 {% endblock %}
 {% block scripts %}<script type="module" src="/static/js/analysis.js"></script>{% endblock %}

@@ -111,7 +111,7 @@ class TestReview:
     def test_review_page(self, client, cfg):
         pid = project_with_cut(client, cfg)
         page = client.get(f"/projects/{pid}/review", headers={"Accept-Language": "de"}).text
-        assert f'src="/projects/{pid}/review/app/"' in page and "Fertig → Export" in page and "review.js" in page
+        assert f'src="/projects/{pid}/review/app/"' in page and "<span>Fertig</span><svg class=\"ico\"" in page and "review.js" in page
         empty = TestProjects().create(client, "Empty")
         assert "noch keine Fassung" in client.get(f"/projects/{empty}/review", headers={"Accept-Language": "de"}).text
 

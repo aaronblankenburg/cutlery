@@ -17,6 +17,7 @@ from starlette.background import BackgroundTask
 from starlette.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
+from markupsafe import Markup, escape
 from starlette.templating import Jinja2Templates
 
 from . import __version__, i18n
@@ -109,7 +110,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
                 ready=lambda pid: overview.ready(projects, worker, pid))
     telegram.on_answer = lambda pid, domain, allow: jobs.answer_egress(pid, domain, allow)
     reviews = Reviews(cfg, db, projects)
-    shares = Shares(db)
+    shares = Shares(db, cfg.data_dir / "share.key")
     claude_cache = {"t": 0.0, "info": None}
 
     def claude_info():
@@ -139,6 +140,11 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         return info
     tus = TusApp(cfg, db, projects, on_stored=worker.request)
     templates = Jinja2Templates(directory=str(PKG / "templates"))
+    templates.env.globals["icon"] = icon = lambda name: Markup(   # static/img/icons.svg, see static/js/icons.js
+        f'<svg class="ico" aria-hidden="true"><use href="/static/img/icons.svg#{escape(name)}"></use></svg>')
+    # "Done → Export" on a button: the words in spans, the arrows as icons (like arrowText in icons.js)
+    templates.env.filters["arrows"] = lambda text: Markup(icon("arrow-right")).join(
+        Markup("<span>%s</span>") % part for part in str(text).split(" → "))
 
     def lang_of(request: Request) -> str:
         return i18n.negotiate(request.cookies.get(i18n.COOKIE), request.headers.get("accept-language"))

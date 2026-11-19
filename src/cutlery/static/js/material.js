@@ -7,6 +7,7 @@
 // /api/projects/<id>/material, the pictures from the analysis, the video from the 360p copies.
 import { load, t, lang } from './i18n.js';
 import { duration as fmtDuration } from './format.js';
+import { icon, withIcon } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 const root = $('material');
@@ -255,16 +256,17 @@ function editChip(kind, key, n) {
   const name = key.slice(2);
   const chip = el('span', `tag-chip k-${kind} editing`);
   chip.append(el('span', null, tagLabel(kind, name)), el('span', 'n', String(n)));
-  const act = (label, title, fn) => {
-    const b = el('button', 'x', label);
+  const act = (ic, title, fn) => {
+    const b = el('button', 'x');
+    b.append(icon(ic));
     b.type = 'button'; b.title = title; b.setAttribute('aria-label', title);
     b.addEventListener('click', fn);
     chip.append(b);
   };
   if (kind === 'u') {
-    act('✎', t('material.tag_rename', { tag: name }), () => renameTag(name));
-    act('×', t('material.tag_delete_all', { tag: name }), () => deleteTag(name, n));
-  } else act('×', t('material.tag_hide', { tag: tagLabel(kind, name) }), () => hideTag(key));
+    act('pencil', t('material.tag_rename', { tag: name }), () => renameTag(name));
+    act('x', t('material.tag_delete_all', { tag: name }), () => deleteTag(name, n));
+  } else act('x', t('material.tag_hide', { tag: tagLabel(kind, name) }), () => hideTag(key));
   return chip;
 }
 function tagList() {
@@ -301,7 +303,7 @@ function tagList() {
       const b = el('button', `tag-chip k-${key[0]} hidden-tag`);
       b.type = 'button';
       b.title = t('material.tag_show');
-      b.append(el('span', null, tagLabel(key[0], key.slice(2))), el('span', 'x', '↺'));
+      b.append(el('span', null, tagLabel(key[0], key.slice(2))), withIcon('span', 'x', 'undo'));
       b.addEventListener('click', () => hideTag(key, null, false));
       row.append(b);
     }
@@ -318,7 +320,7 @@ function activeTags() {
     const chip = el('button', `tag-chip k-${key[0]} on`);
     chip.type = 'button';
     chip.title = t('material.tag_remove_filter');
-    chip.append(el('span', null, tagLabel(key[0], key.slice(2))), el('span', 'x', '×'));
+    chip.append(el('span', null, tagLabel(key[0], key.slice(2))), withIcon('span', 'x', 'x'));
     chip.addEventListener('click', () => setTags(F.tags.filter((x) => x !== key)));
     box.append(chip);
   }
@@ -394,22 +396,22 @@ function render() {
 
 function badges(c) {
   const box = el('span', 'tile-badges');
-  if (c.words) box.append(el('span', 'badge', `🗣 ${c.words}`));
-  if (c.people.length) box.append(el('span', 'badge', `👤 ${c.people.map((p) => S.people.get(p) || p).join(', ')}`));
+  if (c.words) box.append(withIcon('span', 'badge', 'speech', String(c.words)));
+  if (c.people.length) box.append(withIcon('span', 'badge', 'user', c.people.map((p) => S.people.get(p) || p).join(', ')));
   const latest = selCut();
   const used = c.used.filter((u) => u.cut === latest);
   if (used.length) {
     const share = Math.round((100 * total(usedRanges(c, latest))) / Math.max(0.1, c.duration || 0));
-    const b = el('span', 'badge used', `✂ ${latest} · ${[...new Set(used.map((u) => u.nr))].join(', ')} · ${share} %`);
+    const b = withIcon('span', 'badge used', 'scissors', `${latest} · ${[...new Set(used.map((u) => u.nr))].join(', ')} · ${share} %`);
     b.title = t('material.used_share', { cut: latest, share, rest: Math.round(restOf(c, latest)) });
     box.append(b);
   }
   const kinds = new Set(marksOf(c.id).map((m) => m.kind));
-  if (kinds.has('favorite')) box.append(el('span', 'badge fav', '★'));
-  if (kinds.has('reject')) box.append(el('span', 'badge rej', '⊘'));
+  if (kinds.has('favorite')) box.append(withIcon('span', 'badge fav', 'star'));
+  if (kinds.has('reject')) box.append(withIcon('span', 'badge rej', 'ban'));
   const sugg = GUEST ? [] : suggOf(c.id);
   if (sugg.length) {
-    const b = el('span', 'badge sugg', `💡 ${sugg.length}`);
+    const b = withIcon('span', 'badge sugg', 'bulb', String(sugg.length));
     b.title = t('material.sugg_tile', { names: [...new Set(sugg.map((s) => s.by))].join(', ') });
     box.append(b);
   }
@@ -580,13 +582,16 @@ function suggBar() {
   if (bar.hidden) return;
   const by = new Map();
   for (const s of S.suggestions) by.set(s.by, (by.get(s.by) || 0) + 1);
-  bar.append(el('span', null, `💡 ${[...by].map(([n, k]) => t(k === 1 ? 'material.sugg_from_one' : 'material.sugg_from', { name: n, n: k })).join(' · ')}`));
-  const btn = (label, fn, cls = '') => { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', fn); bar.append(b); };
+  bar.append(withIcon('span', 'sugg-who', 'bulb', [...by].map(([n, k]) => t(k === 1 ? 'material.sugg_from_one' : 'material.sugg_from', { name: n, n: k })).join(' · ')));
+  const btn = (label, fn, cls = '', ic = null) => {
+    const b = ic ? withIcon('button', cls, ic, label) : el('button', cls, label);
+    b.type = 'button'; b.addEventListener('click', fn); bar.append(b);
+  };
   btn(S.suggOnly ? t('material.sugg_all_clips') : t('material.sugg_only'), () => { S.suggOnly = !S.suggOnly; render(); });
-  btn(t('material.sugg_accept_all'), () => decide(S.suggestions.map((s) => s.id), true), 'ok');
+  btn(t('material.sugg_accept_all'), () => decide(S.suggestions.map((s) => s.id), true), 'ok', 'check');
   btn(t('material.sugg_decline_all'), () => {
     if (confirm(t('material.sugg_decline_confirm', { n: S.suggestions.length }))) decide(S.suggestions.map((s) => s.id), false);
-  });
+  }, '', 'x');
 }
 async function decide(ids, accept) {
   try {
@@ -596,8 +601,9 @@ async function decide(ids, accept) {
     if (S.open) { showMarks(); showTags(); track(); }
   } catch (e) { alert(e.message); }
 }
-function suggLabel(s, c) {
-  const what = s.kind === 'favorite' ? `★ ${t('material.favorite')}` : s.kind === 'reject' ? `⊘ ${t('material.reject')}` : `🏷 ${s.tag}`;
+const KIND_ICON = { favorite: 'star', reject: 'ban', tag: 'tag' };
+function suggLabel(s) {
+  const what = s.kind === 'favorite' ? t('material.favorite') : s.kind === 'reject' ? t('material.reject') : s.tag;
   const where = s.in == null ? t('material.whole_clip') : `${mmss(s.in)}–${mmss(s.out)}`;
   return `${what} · ${where}${s.note ? ` – ${s.note}` : ''}`;
 }
@@ -610,10 +616,10 @@ function showSuggestions() {
   ul.append(el('li', 'small muted', t('material.sugg_title')));
   for (const s of list) {
     const li = el('li', 'mark suggested');
-    const go = el('button', 'mark-label', `${s.by}: ${suggLabel(s)}`);
+    const go = withIcon('button', 'mark-label', KIND_ICON[s.kind] || 'tag', `${s.by}: ${suggLabel(s)}`);
     go.type = 'button';
     go.addEventListener('click', () => seek(s.in ?? 0));
-    const yes = el('button', 'ok', '✓'), no = el('button', 'mark-del', '✕');
+    const yes = withIcon('button', 'ok', 'check'), no = withIcon('button', 'mark-del', 'x');
     yes.type = no.type = 'button';
     yes.title = t('material.sugg_accept'); no.title = t('material.sugg_decline');
     yes.setAttribute('aria-label', yes.title); no.setAttribute('aria-label', no.title);
@@ -648,18 +654,18 @@ function selection() {
   $('m-sel-hint').hidden = n > 0 || !S.clips.length;
   if (n) $('m-sel-n').textContent = t(n === 1 ? 'material.sel_one' : 'material.sel_n', { n });
 }
-async function addMany(items, done) {
+async function addMany(items, done, ic = null) {
   try {
     const r = await api(`/api/projects/${project}/selects`, { method: 'POST', body: JSON.stringify({ items }) });
     for (const s of r.selects) if (!S.selects.some((x) => x.id === s.id)) S.selects.push(mine(s));
     tagNames();
     render();
-    flashBar(done);
+    flashBar(done, ic);
   } catch (e) { alert(e.message); }
 }
-function flashBar(text) {
+function flashBar(text, ic = null) {
   const n = $('m-sel-n'), old = n.textContent;
-  n.textContent = text;
+  n.replaceChildren(...(ic ? [icon(ic), text] : [text]));
   setTimeout(() => { if (n.textContent === text) selection(); }, 1600);
   if (!old) selection();
 }
@@ -667,7 +673,7 @@ $('m-sel-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const tag = $('m-sel-tag').value.trim();
   if (!tag || !S.chosen.size) { $('m-sel-tag').focus(); return; }
-  addMany([...S.chosen].map((clip) => ({ clip, kind: 'tag', tag })), t('material.tagged_n', { tag, n: S.chosen.size }));
+  addMany([...S.chosen].map((clip) => ({ clip, kind: 'tag', tag })), t('material.tagged_n', { tag, n: S.chosen.size }), 'tag');
   $('m-sel-tag').value = '';
 });
 $('m-sel-untag').addEventListener('click', async () => {
@@ -680,8 +686,8 @@ $('m-sel-untag').addEventListener('click', async () => {
     flashBar(t('material.untagged_n', { tag, n: r.removed }));
   } catch (e) { alert(e.message); }
 });
-$('m-sel-fav').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'favorite' })), t('material.saved_favorite')));
-$('m-sel-rej').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'reject' })), t('material.saved_reject')));
+$('m-sel-fav').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'favorite' })), t('material.saved_favorite'), 'star'));
+$('m-sel-rej').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'reject' })), t('material.saved_reject'), 'ban'));
 $('m-sel-clear').addEventListener('click', () => { S.chosen.clear(); S.anchor = null; render(); });
 document.addEventListener('keydown', (e) => {
   if (mon.open || !S.chosen.size || e.key !== 'Escape' || !pop.hidden) return;
@@ -707,7 +713,11 @@ function table(clips) {
       c.people.map((p) => S.people.get(p) || p).join(', '),
       [...new Set(userTagsOf(c.id).map((m) => m.tag)), ...(c.tags || []).slice(0, 3).map(([n]) => tagLabel('c', n))].join(', '),
       used.length ? `${latest} · ${used.join(', ')}` : '',
-      `${kinds.has('favorite') ? '★' : ''}${kinds.has('reject') ? '⊘' : ''}`]) r.insertCell().textContent = v;
+      '']) r.insertCell().textContent = v;
+    const marks = r.cells[r.cells.length - 1];
+    marks.className = 'marks-cell';
+    if (kinds.has('favorite')) marks.append(icon('star', 'fav'));
+    if (kinds.has('reject')) marks.append(icon('ban', 'rej'));
     r.addEventListener('click', (e) => {
       if (e.shiftKey) choose(c.id, 'range');
       else if (e.ctrlKey || e.metaKey || S.chosen.size) choose(c.id, 'toggle');
@@ -737,8 +747,8 @@ async function openMonitor(cid) {
   $('mon-title').textContent = c.file;
   const meta = [c.created ? `${dayTitle(c.day)}, ${timeOf(c)}` : t('material.no_date'), mmss(c.duration), c.camera,
     `${c.width}×${c.height}`, c.id];
-  if (c.people.length) meta.push(`👤 ${c.people.map((p) => S.people.get(p) || p).join(', ')}`);
   $('mon-meta').textContent = meta.join(' · ');
+  if (c.people.length) $('mon-meta').append(' · ', withIcon('span', 'ico-text', 'user', c.people.map((p) => S.people.get(p) || p).join(', ')));
   const used = $('mon-used');
   used.textContent = '';
   for (const u of c.used) {
@@ -808,7 +818,7 @@ function showMarks() {
   showSuggestions();
   for (const m of marksOf(S.open).filter((x) => x.kind !== 'tag')) {
     const li = el('li', `mark ${m.kind}${m.suggested ? ' suggested' : ''}`);
-    const label = el('button', 'mark-label', `${m.kind === 'favorite' ? '★' : '⊘'} ${m.in == null ? t('material.whole_clip') : `${mmss(m.in)}–${mmss(m.out)}`}`);
+    const label = withIcon('button', 'mark-label', m.kind === 'favorite' ? 'star' : 'ban', m.in == null ? t('material.whole_clip') : `${mmss(m.in)}–${mmss(m.out)}`);
     label.type = 'button';
     label.title = t('material.mark_jump');
     label.addEventListener('click', () => seek(m.in ?? 0));
@@ -818,7 +828,7 @@ function showMarks() {
     note.addEventListener('change', async () => {
       try { Object.assign(m, await api(`/api/projects/${project}/selects/${m.id}`, { method: 'PATCH', body: JSON.stringify({ note: note.value }) })); } catch (e) { alert(e.message); }
     });
-    const del = el('button', 'mark-del', '×');
+    const del = withIcon('button', 'mark-del', 'x');
     del.type = 'button';
     del.title = t('material.mark_delete');
     del.addEventListener('click', async () => {
@@ -857,7 +867,7 @@ function showTags() {
     go.title = m.in == null ? t('material.whole_clip') : t('material.mark_jump');
     go.addEventListener('click', () => seek(m.in ?? 0));
     hover(go, m.in == null ? [[0, c.duration]] : [[m.in, m.out]]);
-    const del = el('button', 'x', '×');
+    const del = withIcon('button', 'x', 'x');
     del.type = 'button';
     del.title = t('material.tag_delete', { tag: m.tag });
     del.setAttribute('aria-label', del.title);
@@ -896,7 +906,7 @@ function showTags() {
       hover(b, rs);
       if (GUEST) { row.append(b); continue; }
       const wrap = el('span', 'tag-pair');
-      const x = el('button', 'tag-hide', '×');
+      const x = withIcon('button', 'tag-hide', 'x');
       x.type = 'button';
       x.title = t('material.tag_hide_clip', { tag: tagLabel(kind, name) });
       x.setAttribute('aria-label', x.title);
@@ -947,7 +957,7 @@ $('mon-tag-form').addEventListener('submit', async (e) => {
     input.value = '';
     S.rIn = S.rOut = null;
     showRange(); showTags(); track(); tagNames();
-    flash(t('material.tagged', { tag }));
+    flash(t('material.tagged', { tag }), 'tag');
     input.blur();
   } catch (err) { alert(err.message); }
 });
@@ -966,15 +976,16 @@ async function mark(kind) {
     $('mon-note').value = '';
     S.rIn = S.rOut = null;
     showRange(); showMarks(); track();
-    flash(GUEST ? t('guest.saved_suggestion') : kind === 'favorite' ? t('material.saved_favorite') : t('material.saved_reject'));
+    flash(GUEST ? t('guest.saved_suggestion') : kind === 'favorite' ? t('material.saved_favorite') : t('material.saved_reject'),
+      GUEST ? 'bulb' : KIND_ICON[kind]);
   } catch (e) { alert(e.message); }
 }
 $('mon-fav').addEventListener('click', () => mark('favorite'));
 $('mon-rej').addEventListener('click', () => mark('reject'));
-function flash(text) {
+function flash(text, ic = null) {
   const k = $('mon-keys'), old = k.dataset.text || k.textContent;
   k.dataset.text = old;
-  k.textContent = text;
+  k.replaceChildren(...(ic ? [icon(ic), text] : [text]));
   k.classList.add('flash');
   setTimeout(() => { k.textContent = old; k.classList.remove('flash'); }, 1800);
 }
@@ -1025,7 +1036,8 @@ function head() {
   const d = c.duration || video.duration || 1;
   $('mon-head').style.left = `${(clamp(video.currentTime, 0, d) / d) * 100}%`;
   $('mon-time').textContent = `${mmss(video.currentTime)} / ${mmss(d)}`;
-  $('mon-play').textContent = video.paused ? '▶' : '❚❚';
+  const playing = video.paused ? 'play' : 'pause';
+  if ($('mon-play').dataset.icon !== playing) { $('mon-play').replaceChildren(icon(playing)); $('mon-play').dataset.icon = playing; }
   const x = video.currentTime;
   for (const w of S.words) w.span.classList.toggle('now', x >= w.a && x < w.b);
 }

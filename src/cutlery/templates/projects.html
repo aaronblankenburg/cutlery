@@ -43,7 +43,7 @@
           {%- elif st.uploaded < st.usable -%}{{ t('projects.state.uploading', done=st.uploaded, total=st.usable) }}
           {%- else -%}{{ t('projects.detail.analysis.' + (st.analysis.state or 'idle')) }}{%- endif -%}
         </span>
-        <span class="go">{{ t(action) }} →</span>
+        <span class="go"><span>{{ t(action) }}</span>{{ icon('arrow-right') }}</span>
       </div>
     </div>
   </a>

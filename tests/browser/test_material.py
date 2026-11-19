@@ -112,7 +112,7 @@ def test_material_page(page, server):
     page.wait_for_function("() => !document.getElementById('monitor').open")
 
     # marks on the tiles, filters, the list
-    assert page.inner_text(".tile[data-id=C001] .tile-badges").strip().endswith("★")
+    assert page.locator(".tile[data-id=C001] .tile-badges .badge.fav:last-child").count() == 1
     page.select_option("#m-mark", "favorite")
     assert page.eval_on_selector_all(".tile", "els => els.map(e => e.dataset.id)") == ["C001"]
     page.select_option("#m-mark", "")
