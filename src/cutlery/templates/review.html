@@ -13,6 +13,11 @@
     <button class="button primary" type="button" id="review-done" hidden></button>
     <a class="button" href="/projects/{{ project.id }}/export">{{ t('review.to_export') }}</a>
   </span>
+  <div class="next-note" id="next-note" hidden>
+    <label class="visually-hidden" for="next-note-text" id="next-note-label"></label>
+    <textarea id="next-note-text" rows="1" maxlength="4000"></textarea>
+    <div class="next-note-head"><span class="small muted" id="next-note-state" aria-live="polite"></span></div>
+  </div>
 </div>
 <div class="notice error" id="review-error" hidden></div>
 <iframe class="review-frame" id="review-frame" src="/projects/{{ project.id }}/review/app/" title="{{ t('review.frame_title') }}"></iframe>

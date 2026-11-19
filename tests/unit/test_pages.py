@@ -60,7 +60,14 @@ class TestReview:
         pid = project_with_cut(client, cfg)
         api = f"/projects/{pid}/review/api"
         e = client.post(f"{api}/entries", json={"cut": "cut1", "t": 2.0, "text": "x"}).json()["entry"]
+        # the note for the next cut, written during the review: saved, read back, cleared when the job is queued
+        note = f"/api/projects/{pid}/review/note"
+        assert client.get(note).json()["text"] == ""
+        assert client.put(note, json={"text": "Kürzer insgesamt."}).json()["ok"] is True
+        assert client.get(note).json()["text"] == "Kürzer insgesamt."
+        assert client.put(note, json={"text": "x" * 4001}).status_code == 422
         r = client.post(f"/api/projects/{pid}/review/done", json={"cut": "cut1"})
+        assert client.get(note).json()["text"] == ""
         assert r.status_code == 201 and r.json()["cut"] == "cut2"
         assert client.get(f"{api}/cuts").json()["cuts"][0]["locked"] is True
         # a locked cut takes no more comments, changes or deletions

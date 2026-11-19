@@ -54,7 +54,14 @@ def test_comment_and_finish_the_review(page, server, clips, monkeypatch):
     e = page.evaluate(f"() => fetch('{api}').then(r => r.json()).then(d => d.entries[0])")
     assert e["section"] == "Glacier" and abs(e["t"] - 13.0) < 0.5 and e["person"] == "cutlery"
     page.wait_for_function("() => document.getElementById('review-state').textContent.includes('1')")
+    # the note for the next cut is there during the review and saved as it is typed
+    assert page.is_visible("#next-note-text")
+    page.fill("#next-note-text", "Shorter")
+    page.wait_for_function(f"() => fetch('/api/projects/{pid}/review/note').then(r => r.json()).then(d => d.text === 'Shorter')")
+    page.reload()
+    page.wait_for_function("() => document.getElementById('next-note-text').value === 'Shorter'")
     page.click("#review-done")
+    assert page.input_value("#done-note") == "Shorter"
     page.fill("#done-note", "Shorter overall.")
     page.click("#done-ok")
     page.wait_for_url(f"**/projects/{pid}")
@@ -63,5 +70,6 @@ def test_comment_and_finish_the_review(page, server, clips, monkeypatch):
     assert page.locator("#job-note-box").is_visible()
     page.goto(f"{server['url']}/projects/{pid}/review")
     page.wait_for_function("() => window.cutleryReview && window.cutleryReview.cuts.length")
-    assert page.locator("#review-done").is_hidden()
+    assert page.locator("#review-done").is_hidden() and page.locator("#next-note").is_hidden()
+    assert page.evaluate(f"() => fetch('/api/projects/{pid}/review/note').then(r => r.json()).then(d => d.text)") == ""
     server["app"].state.jobs.cancel_project(pid)

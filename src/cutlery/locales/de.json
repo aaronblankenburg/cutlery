@@ -787,5 +787,11 @@
   "material.sel_untag": "Tag entfernen",
   "material.untagged_n": "{tag} von {n} Clips entfernt",
   "material.md.everywhere": "überall",
-  "material.md.wrong": "Falsch erkannte Tags der Analyse (nicht beachten)"
+  "material.md.wrong": "Falsch erkannte Tags der Analyse (nicht beachten)",
+  "review.note_label": "Mitteilung an Claude für Fassung {n} (optional, wird beim Tippen gespeichert)",
+  "review.note_saving": "speichert …",
+  "review.note_saved": "gespeichert {time}",
+  "review.note_unsaved": "noch nicht gespeichert",
+  "review.note_error": "nicht gespeichert: {error}",
+  "review.note_placeholder": "Mitteilung an Claude für Fassung {n} – wird beim Tippen gespeichert"
 }

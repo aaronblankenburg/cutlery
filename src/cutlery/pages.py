@@ -1,6 +1,7 @@
 """The project pages after docs/design (status, setup, review, analysis) and their small APIs."""
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import pathlib
@@ -15,6 +16,8 @@ from starlette.routing import Route
 
 from . import briefing, cutter_project, eta, files, i18n, material, overview, review
 from .jobs import JobError
+from .memory import MAX_NOTE as NOTE_MAX
+from .storage import write_atomic
 from .projects import NotFound
 
 # cutter's review frontend in a frame of the review page: its own policy (cutter's), framed by Cutlery pages only
@@ -390,6 +393,26 @@ def routes(c: Context):
             raise HTTPException(404)
         return FileResponse(f, headers={"cache-control": "private, max-age=60"})
 
+    async def api_review_note(request):
+        """The note for the next cut, written while reviewing (saved as it is typed, DATA/projects/<id>/next_note.json);
+        "review done" sends it with the job and clears it."""
+        p = c.project_or_404(request.path_params["pid"])
+        f = projects.paths(p["id"]).data / "next_note.json"
+        if request.method == "PUT":
+            data = await c.read_json(request)
+            text = data.get("text") if isinstance(data, dict) else None
+            if not isinstance(text, str) or len(text) > NOTE_MAX:
+                return JSONResponse({"error": f"text: at most {NOTE_MAX} characters"}, status_code=422)
+            saved = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+            await anyio.to_thread.run_sync(write_atomic, f, json.dumps({"text": text, "saved": saved},
+                                                                       ensure_ascii=False).encode())
+            return JSONResponse({"ok": True, "saved": saved})
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            d = {}
+        return JSONResponse({"text": str(d.get("text") or ""), "saved": d.get("saved")})
+
     async def review_done(request):
         """"Review done → next cut": lock the cut's comments and queue the next cut."""
         p = c.project_or_404(request.path_params["pid"])
@@ -405,6 +428,7 @@ def routes(c: Context):
         except JobError as e:
             await anyio.to_thread.run_sync(reviews.unlock_cut, p["id"], cut)
             return JSONResponse({"error": str(e), "message": i18n.translate(c.lang_of(request), e.key)}, status_code=409)
+        (projects.paths(p["id"]).data / "next_note.json").unlink(missing_ok=True)     # sent with the job
         return JSONResponse({"job": j["id"], "cut": j["cut"]}, status_code=201)
 
     return [
@@ -421,6 +445,7 @@ def routes(c: Context):
         Route("/api/projects/{pid}/selects", api_selects, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/selects/{sid}", api_select, methods=["PATCH", "DELETE"]),
         Route("/api/projects/{pid}/tags", api_tags, methods=["POST"]),
+        Route("/api/projects/{pid}/review/note", api_review_note, methods=["GET", "PUT"]),
         Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),
         Route("/projects/{pid}/analysis/{kind}/{name}", analysis_file),
         Route("/projects/{pid}/thumb/{n:int}", thumb),

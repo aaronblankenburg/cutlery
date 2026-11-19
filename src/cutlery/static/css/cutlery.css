@@ -362,6 +362,16 @@ main.wide { max-width: 1400px; }
 main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-3); }
 .review-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-bottom: var(--space-3); }
 .review-bar .actions { margin-left: auto; display: flex; gap: var(--space-2); flex-wrap: wrap; }
+/* the note for the next cut: one line between the state and the buttons, taller while it is written */
+.next-note { order: 1; flex: 1 1 320px; position: relative; min-width: 0; }
+.review-bar .actions { order: 2; }
+.next-note[hidden] { display: none; }
+.next-note-head { position: absolute; right: 12px; bottom: 4px; z-index: 1; pointer-events: none; line-height: 1.2; }
+.next-note textarea:not(:focus):not(.filled) + * { display: none; }
+.next-note textarea:placeholder-shown { white-space: nowrap; text-overflow: ellipsis; }
+.next-note textarea { display: block; width: 100%; height: 40px; min-height: 40px; padding: 8px 10px; resize: none;
+  overflow: hidden; transition: height 0.15s; }
+.next-note textarea:focus, .next-note textarea.filled { height: 6.5em; overflow: auto; resize: vertical; }
 .review-frame { display: block; width: 100%; height: 75vh; border: 1px solid var(--border); border-radius: var(--radius-lg);
   background: var(--bg); }
 .dialog { width: min(560px, calc(100vw - 32px)); padding: var(--space-5); border: 1px solid var(--border-strong);

@@ -787,5 +787,11 @@
   "material.sel_untag": "Remove tag",
   "material.untagged_n": "{tag} removed from {n} clips",
   "material.md.everywhere": "everywhere",
-  "material.md.wrong": "Tags the analysis got wrong (ignore them)"
+  "material.md.wrong": "Tags the analysis got wrong (ignore them)",
+  "review.note_label": "Note for Claude for cut {n} (optional, saved as you type)",
+  "review.note_saving": "saving …",
+  "review.note_saved": "saved {time}",
+  "review.note_unsaved": "not saved yet",
+  "review.note_error": "not saved: {error}",
+  "review.note_placeholder": "Note for Claude for cut {n} – saved as you type"
 }
