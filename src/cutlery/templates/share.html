@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% set tab = 'share' %}
+{% block title %}{{ t('share.title') }} – {{ project.name }}{% endblock %}
+{% block main %}
+{% include "_project_nav.html" %}
+<div class="page-head">
+  <div>
+    <h1>{{ t('share.title') }}</h1>
+    <p>{{ t('share.lead') }}</p>
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="col-main stack">
+    <form class="card stack" id="share-form" data-project="{{ project.id }}">
+      <header><h2>{{ t('share.new') }}</h2></header>
+      <div class="grid-2">
+        <div><label for="share-name">{{ t('share.name') }}</label>
+          <input type="text" id="share-name" maxlength="40" required placeholder="{{ t('share.name_placeholder') }}" autocomplete="off"></div>
+        <div><label for="share-days">{{ t('share.expires') }}</label>
+          <select id="share-days">{% set labels = {0: t('share.days_0'), 7: t('share.days_7'), 30: t('share.days_30'), 90: t('share.days_90')} %}{% for d in expiry %}<option value="{{ d }}" {% if d == 30 %}selected{% endif %}>{{ labels[d] }}</option>{% endfor %}</select></div>
+      </div>
+      <div class="actions"><button class="button primary" type="submit">{{ t('share.create') }}</button></div>
+      <div class="notice error" id="share-error" hidden></div>
+      <div class="share-made" id="share-made" hidden>
+        <p><strong id="share-made-title"></strong></p>
+        <div class="share-url"><input type="text" id="share-url" readonly aria-label="{{ t('share.link') }}">
+          <button class="button" type="button" id="share-copy">{{ t('share.copy') }}</button></div>
+        <p class="small muted">{{ t('share.once') }}</p>
+      </div>
+    </form>
+
+    <section class="card stack">
+      <header><h2>{{ t('share.links') }}</h2></header>
+      <p class="muted small" id="share-none">{{ t('share.none') }}</p>
+      <div class="table-wrap"><table class="clips" id="share-table" hidden>
+        <thead><tr><th>{{ t('share.col.name') }}</th><th>{{ t('share.col.created') }}</th><th>{{ t('share.col.expires') }}</th>
+          <th>{{ t('share.col.used') }}</th><th>{{ t('share.col.state') }}</th><th><span class="visually-hidden">{{ t('share.col.actions') }}</span></th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+  </div>
+  <aside class="col-side">
+    <section class="card stack small">
+      <h2>{{ t('share.can_title') }}</h2>
+      <ul class="plain-list">
+        <li>✓ {{ t('share.can.review') }}</li>
+        <li>✓ {{ t('share.can.comment') }}</li>
+        <li>✓ {{ t('share.can.material') }}</li>
+        <li>✓ {{ t('share.can.suggest') }}</li>
+        <li>✗ {{ t('share.cannot') }}</li>
+      </ul>
+      <p class="muted">{{ t('share.notify') }}</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/js/share.js"></script>{% endblock %}

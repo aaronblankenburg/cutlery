@@ -33,6 +33,7 @@ from .telegram import Telegram, TelegramError
 from . import egress, memory, overview, pages
 from .review import Reviews
 from .auth import BasicAuthMiddleware
+from .share import Shares
 from .db import Database
 from .projects import NotFound, Projects
 from .sidecar import SidecarError
@@ -108,6 +109,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
                 ready=lambda pid: overview.ready(projects, worker, pid))
     telegram.on_answer = lambda pid, domain, allow: jobs.answer_egress(pid, domain, allow)
     reviews = Reviews(cfg, db, projects)
+    shares = Shares(db)
     claude_cache = {"t": 0.0, "info": None}
 
     def claude_info():
@@ -143,6 +145,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
 
     def page(request: Request, name: str, **ctx):
         lang = lang_of(request)
+        ctx.setdefault("guest", (request.scope.get("state") or {}).get("guest"))
         ctx.update(lang=lang, languages=i18n.languages(), version=__version__,
                    t=lambda key, **v: i18n.translate(lang, key, **v), disks=disk_space(cfg),
                    claude=claude_info(), queue=jobs.running_count(),
@@ -634,16 +637,18 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         Route("/healthz", healthz),
         *tus.routes(),
         *pages.routes(pages.Context(projects=projects, jobs=jobs, reviews=reviews, worker=worker, cfg=cfg, page=page,
+                                    shares=shares,
                                     read_json=read_json, project_or_404=project_or_404, lang_of=lang_of)),
         Mount("/static", app=StaticFiles(directory=str(PKG / "static")), name="static"),
     ]
     middleware = [
         Middleware(SecurityHeaders),
         Middleware(BasicAuthMiddleware, htpasswd=cfg.htpasswd, trusted_proxies=cfg.trusted_proxies,
-                   health_token=health_token),
+                   health_token=health_token, shares=shares),
     ]
     app = Starlette(routes=routes, middleware=middleware, lifespan=lifespan,
                     exception_handlers={HTTPException: http_error, Exception: server_error})
     app.state.cfg, app.state.db, app.state.projects, app.state.tus, app.state.worker = cfg, db, projects, tus, worker
     app.state.jobs, app.state.reviews, app.state.telegram = jobs, reviews, telegram
+    app.state.shares = shares
     return app

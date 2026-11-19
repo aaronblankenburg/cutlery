@@ -632,7 +632,12 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .mon-tags h3 { margin: var(--space-2) 0 0; }
 .mon-tags p { margin: 0; }
 #mon-tagl { top: 25px; height: 4px; }
-.monitor-track { height: 30px; }
+#mon-cutl { top: 31px; height: 5px; }
+.monitor-track { height: 38px; }
+.msel.cutuse { background: var(--info-fg); border-radius: 1px; }
+/* where the chosen cut uses the clip (a line under the quality bar) */
+.ubar { position: relative; height: 3px; margin-top: -2px; }
+.ubar span { position: absolute; top: 0; bottom: 0; background: var(--info-fg); border-radius: 1px; }
 .msel.tag { background: var(--link); border-radius: 1px; }
 #mon-hl { top: -2px; bottom: -2px; pointer-events: none; }
 .hl { position: absolute; top: 0; bottom: 0; background: rgb(255 255 255 / 0.18); outline: 1px solid rgb(255 255 255 / 0.7);
@@ -692,3 +697,24 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .shape-2-3 { aspect-ratio: 1080 / 1620; height: 44px; }
 .shape-4-3 { aspect-ratio: 1440 / 1080; width: 52px; }
 .shape-21-9 { aspect-ratio: 2560 / 1080; width: 52px; }
+
+/* sharing with guests: the share page, a guest's header, suggestions on the material page */
+.plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.share-made { padding: var(--space-3); border: 1px solid var(--accent); border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.share-made p { margin: 0 0 6px; }
+.share-url { display: flex; gap: 6px; }
+.share-url input { flex: 1; min-width: 0; font-family: var(--font-mono); font-size: 13px; }
+.guest-badge { margin-right: auto; padding: 3px 10px; border-radius: var(--radius-pill); border: 1px solid var(--accent);
+  color: var(--accent); }
+.sugg-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2); padding: 6px 10px;
+  border: 1px dashed var(--accent); border-radius: var(--radius-md); font-size: 14px; }
+.sugg-bar[hidden] { display: none; }
+.sugg-bar > span { margin-right: auto; }
+.material-bar .sugg-bar button { min-height: 32px; }
+.material-bar .sugg-bar button.ok, .monitor .mon-list button.ok { color: var(--ok-fg); }
+.badge.sugg { color: var(--accent); border: 1px dashed var(--accent); background: none; }
+.mon-list .mark.suggested { border-left: 2px dashed var(--accent); padding-left: 6px; }
+.mon-list .mark.suggested .mark-label { white-space: normal; text-align: left; }
+.tag-chip.suggested { border-style: dashed !important; }
+.mon-list .mark .ok { min-height: 32px; padding: 0 10px; }

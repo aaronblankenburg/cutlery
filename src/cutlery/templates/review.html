@@ -7,11 +7,12 @@
 {% if not st.cuts %}
 <div class="empty">{{ t('review.none') }}</div>
 {% else %}
-<div class="review-bar" id="review" data-project="{{ project.id }}">
+<div class="review-bar" id="review" data-project="{{ project.id }}"{% if guest %} data-guest="{{ guest.name }}"{% endif %}>
   <span class="small muted" id="review-state"></span>
   <span class="actions">
     <button class="button primary" type="button" id="review-done" hidden></button>
-    <a class="button" href="/projects/{{ project.id }}/export">{{ t('review.to_export') }}</a>
+    {% if guest %}<a class="button" href="/projects/{{ project.id }}/material">{{ t('guest.to_material') }}</a>
+    {% else %}<a class="button" href="/projects/{{ project.id }}/export">{{ t('review.to_export') }}</a>{% endif %}
   </span>
   <div class="next-note" id="next-note" hidden>
     <label class="visually-hidden" for="next-note-text" id="next-note-label"></label>

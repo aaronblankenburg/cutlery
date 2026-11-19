@@ -135,6 +135,32 @@ def test_tags(page, server):
     tags = sorted({s["tag"] for s in json.loads((cfg.data_dir / "projects" / pid / "selects.json").read_text())["selects"]})
     assert tags == ["Sandsturm groß", "Tag eins"]
 
+    # comparing the footage with a cut: what it uses (blue line, share), what it leaves out
+    cuts = cfg.data_dir / "projects" / pid / "cuts"
+    for cut, shots in (("cut1", [{"nr": 1, "clip": "C001", "in": 0, "out": 3}]),
+                       ("cut2", [{"nr": 2, "clip": "C002", "in": 0, "out": 6}])):
+        (cuts / cut).mkdir(parents=True, exist_ok=True)
+        (cuts / cut / "edit.json").write_text(json.dumps({"sections": [{"name": "x", "shots": shots}]}))
+    img = json.loads((a / "image" / "C001.json").read_text())
+    img["usable"] = [{"start": 0, "end": 6, "steady": True}]
+    (a / "image" / "C001.json").write_text(json.dumps(img))
+    page.goto(f"{server['url']}/projects/{pid}/material")
+    page.wait_for_selector(".tile")
+    assert page.input_value("#m-cut") == "cut2"
+    assert "100 %" in page.inner_text(".tile[data-id=C002] .badge.used")
+    assert page.locator(".tile[data-id=C002] .ubar span").count() == 1 and page.locator(".tile[data-id=C001] .ubar span").count() == 0
+    page.select_option("#m-cut", "cut1")
+    assert "50 %" in page.inner_text(".tile[data-id=C001] .badge.used")
+    page.select_option("#m-used", "unused")
+    assert page.eval_on_selector_all(".tile", "els => els.map(e => e.dataset.id)") == ["C002", "C003"]
+    page.select_option("#m-used", "rest")
+    assert page.eval_on_selector_all(".tile", "els => els.map(e => e.dataset.id)") == []     # 3 s left out: < 5 s
+    page.select_option("#m-used", "used")
+    page.click(".tile[data-id=C001]")
+    page.wait_for_selector("#mon-cutl .msel.cutuse")
+    page.keyboard.press("Escape")
+    page.select_option("#m-used", "")
+
     # what the analysis looks at, on the setup page
     page.goto(f"{server['url']}/projects/{pid}/setup")
     page.click("#parts-box summary")

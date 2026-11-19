@@ -1,4 +1,10 @@
 <nav class="project-nav" aria-label="{{ project.name }}">
+  {% if guest %}<span class="crumb-current">{{ project.name }}</span>
+  <span class="tabs">
+    <a href="/projects/{{ project.id }}/review" {% if tab == 'review' %}aria-current="page"{% endif %}>{{ t('project.nav.review') }}</a>
+    <a href="/projects/{{ project.id }}/material" {% if tab == 'material' %}aria-current="page"{% endif %}>{{ t('project.nav.material') }}</a>
+  </span>
+  {% else %}
   <a class="crumb" href="/">{{ t('nav.projects') }}</a><span class="muted" aria-hidden="true">/</span><span class="crumb-current">{{ project.name }}</span>
   <span class="tabs">
     <a href="/projects/{{ project.id }}/setup" {% if tab == 'setup' %}aria-current="page"{% endif %}>{{ t('project.nav.setup') }}</a>
@@ -6,5 +12,7 @@
     <a href="/projects/{{ project.id }}/material" {% if tab == 'material' %}aria-current="page"{% endif %}>{{ t('project.nav.material') }}</a>
     <a href="/projects/{{ project.id }}/review" {% if tab == 'review' %}aria-current="page"{% endif %}>{{ t('project.nav.review') }}</a>
     <a href="/projects/{{ project.id }}/export" {% if tab == 'export' %}aria-current="page"{% endif %}>{{ t('project.nav.export') }}</a>
+    <a href="/projects/{{ project.id }}/share" {% if tab == 'share' %}aria-current="page"{% endif %}>{{ t('project.nav.share') }}</a>
   </span>
+  {% endif %}
 </nav>

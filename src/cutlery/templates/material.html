@@ -6,12 +6,12 @@
 <div class="page-head">
   <div>
     <h1>{{ t('material.title') }}</h1>
-    <p>{{ t('material.lead') }}</p>
+    <p>{{ t('guest.material_lead') if guest else t('material.lead') }}</p>
   </div>
-  <div class="actions"><a class="button" href="/projects/{{ project.id }}/analysis">{{ t('material.details') }}</a></div>
+  {% if not guest %}<div class="actions"><a class="button" href="/projects/{{ project.id }}/analysis">{{ t('material.details') }}</a></div>{% endif %}
 </div>
 
-<div id="material" data-project="{{ project.id }}">
+<div id="material" data-project="{{ project.id }}"{% if guest %} data-guest="{{ guest.name }}"{% endif %}>
   <div class="material-bar" id="material-bar" hidden>
     <div class="material-filters">
       <label class="visually-hidden" for="m-search">{{ t('material.search') }}</label>
@@ -20,11 +20,14 @@
       <select id="m-camera"><option value="">{{ t('material.all_cameras') }}</option></select>
       <label class="visually-hidden" for="m-person">{{ t('material.person') }}</label>
       <select id="m-person"><option value="">{{ t('material.all_people') }}</option></select>
+      <label class="visually-hidden" for="m-cut">{{ t('material.cut') }}</label>
+      <select id="m-cut" title="{{ t('material.cut_title') }}" hidden></select>
       <label class="visually-hidden" for="m-used">{{ t('material.used') }}</label>
       <select id="m-used">
         <option value="">{{ t('material.used_any') }}</option>
         <option value="used">{{ t('material.used_yes') }}</option>
         <option value="unused">{{ t('material.used_no') }}</option>
+        <option value="rest">{{ t('material.used_rest') }}</option>
       </select>
       <label class="visually-hidden" for="m-mark">{{ t('material.mark') }}</label>
       <select id="m-mark">
@@ -48,6 +51,7 @@
       </div>
     </div>
     <div class="active-tags" id="m-active-tags" hidden></div>
+    <div class="sugg-bar" id="m-sugg" hidden></div>
     <div class="material-view">
       <span class="small muted" id="m-count"></span>
       <label class="small muted" for="m-size">{{ t('material.size') }}</label>
@@ -86,6 +90,7 @@
       <div class="mon-layer" id="mon-quality"></div>
       <div class="mon-layer" id="mon-selects"></div>
       <div class="mon-layer" id="mon-tagl"></div>
+      <div class="mon-layer" id="mon-cutl"></div>
       <div class="mon-layer" id="mon-hl"></div>
       <div class="mon-range" id="mon-range" hidden></div>
       <div class="mon-head" id="mon-head"></div>
@@ -116,6 +121,7 @@
     <p class="small" id="mon-meta"></p>
     <ul class="mon-list" id="mon-used"></ul>
     <ul class="mon-list" id="mon-marks"></ul>
+    <ul class="mon-list sugg-list" id="mon-sugg" hidden></ul>
     <section class="mon-tags" aria-labelledby="mon-tags-h">
       <h3 class="small" id="mon-tags-h">{{ t('material.tags') }}</h3>
       <div class="tag-chips" id="mon-utags"></div>

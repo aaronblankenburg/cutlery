@@ -15,6 +15,7 @@ from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Redire
 from starlette.routing import Route
 
 from . import briefing, cutter_project, eta, files, i18n, material, overview, review
+from . import share as share_mod
 from .jobs import JobError
 from .memory import MAX_NOTE as NOTE_MAX
 from .storage import write_atomic
@@ -37,6 +38,11 @@ class Context:
 
 def routes(c: Context):
     projects, jobs, reviews, worker, cfg = c.projects, c.jobs, c.reviews, c.worker, c.cfg
+
+    def guest_of(request):
+        """The guest of a shared link (share.py) making the request, or None for the owner."""
+        g = (request.scope.get("state") or {}).get("guest")
+        return g["name"] if g else None
 
     def t_for(request):
         lang = c.lang_of(request)
@@ -113,12 +119,63 @@ def routes(c: Context):
     async def api_material(request):
         p = c.project_or_404(request.path_params["pid"])
         paths = projects.paths(p["id"])
-        return JSONResponse(await anyio.to_thread.run_sync(material.footage, paths, await known_clips(p)))
+        d = await anyio.to_thread.run_sync(material.footage, paths, await known_clips(p))
+        guest = guest_of(request)
+        if guest:                                  # a guest sees the selection and only their own suggestions
+            d["suggestions"] = [x for x in d["suggestions"] if x.get("by") == guest]
+            d["guest"] = guest
+        return JSONResponse(d)
 
     async def api_material_transcript(request):
         p = c.project_or_404(request.path_params["pid"])
         return JSONResponse(await anyio.to_thread.run_sync(material.transcript, projects.paths(p["id"]),
                                                            request.path_params["cid"]))
+
+    async def api_suggestions(request):
+        """The owner takes a guest's suggestions over ({"action": "accept", "ids": […]}) or drops them ("decline")."""
+        p = c.project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        body = await c.read_json(request)
+        if not isinstance(body, dict) or body.get("action") not in ("accept", "decline"):
+            return JSONResponse({"error": "action: accept or decline"}, status_code=422)
+        try:
+            r = await anyio.to_thread.run_sync(material.decide, paths, body.get("ids"), body["action"] == "accept")
+        except material.SelectError as e:
+            return JSONResponse({"error": str(e)}, status_code=422)
+        await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
+        return JSONResponse(r)
+
+    # ------------------------------------------------------------ sharing with guests (share.py)
+
+    async def share_page(request):
+        p = c.project_or_404(request.path_params["pid"])
+        return c.page(request, "share.html", project=p, expiry=share_mod.EXPIRY_DAYS)
+
+    def share_url(request, token):
+        base = (cfg.public_url or str(request.base_url)).rstrip("/")
+        return f"{base}/s/{token}"
+
+    async def api_shares(request):
+        p = c.project_or_404(request.path_params["pid"])
+        if request.method == "POST":
+            body = await c.read_json(request)
+            if not isinstance(body, dict):
+                return JSONResponse({"error": "object expected"}, status_code=422)
+            from cutter.review_app import set_password
+            taken = tuple(set_password.names(str(cfg.htpasswd))) if cfg.htpasswd.exists() else ()
+            try:
+                days = int(body.get("days") or 0)
+                row, token = await anyio.to_thread.run_sync(c.shares.create, p["id"], body.get("name"), days, taken)
+            except (share_mod.ShareError, ValueError, TypeError) as e:
+                return JSONResponse({"error": str(e)}, status_code=422)
+            return JSONResponse(dict(row, url=share_url(request, token)), status_code=201)
+        return JSONResponse({"shares": await anyio.to_thread.run_sync(c.shares.list, p["id"])})
+
+    async def api_share(request):
+        p = c.project_or_404(request.path_params["pid"])
+        if not await anyio.to_thread.run_sync(c.shares.revoke, p["id"], request.path_params["sid"]):
+            return JSONResponse({"error": "not found"}, status_code=404)
+        return JSONResponse({"revoked": request.path_params["sid"]})
 
     async def api_tags(request):
         """Managing tags: {"action": "remove", "tag", "clips"?} deletes one of the user's tags (everywhere or from
@@ -171,15 +228,21 @@ def routes(c: Context):
         if request.method == "POST":
             body = await c.read_json(request)
             many = isinstance(body, dict) and "items" in body          # several at once: {"items": [entry, …]}
+            guest = guest_of(request)                                  # a guest's go into the suggestions
             try:
                 if many:
                     s = {"selects": await anyio.to_thread.run_sync(material.add_many, paths, body["items"],
-                                                                   await selectable(p))}
+                                                                   await selectable(p), guest)}
                 else:
-                    s = await anyio.to_thread.run_sync(material.add, paths, body, await selectable(p))
+                    s = await anyio.to_thread.run_sync(material.add, paths, body, await selectable(p), guest)
             except material.SelectError as e:
                 return JSONResponse({"error": str(e)}, status_code=422)
-            await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
+            if guest:
+                n = len(s["selects"]) if many else 1
+                for _ in range(n):
+                    jobs.notifier and jobs.notifier.guest_activity(p, guest, "suggestion")
+            else:
+                await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
             return JSONResponse(s, status_code=201)
         return JSONResponse(await anyio.to_thread.run_sync(material.load, paths))
 
@@ -187,13 +250,16 @@ def routes(c: Context):
         p = c.project_or_404(request.path_params["pid"])
         paths = projects.paths(p["id"])
         sid = request.path_params["sid"]
+        guest = guest_of(request)                                      # a guest: only their own suggestions
         if request.method == "DELETE":
-            ok = await anyio.to_thread.run_sync(material.remove, paths, sid)
+            ok = await anyio.to_thread.run_sync(material.remove, paths, sid, guest)
             result = {"deleted": sid}
         else:
             body = await c.read_json(request)
+            if not isinstance(body, dict):
+                return JSONResponse({"error": "object expected"}, status_code=422)
             try:
-                result = await anyio.to_thread.run_sync(material.change, paths, sid, body, await selectable(p))
+                result = await anyio.to_thread.run_sync(material.change, paths, sid, body, await selectable(p), guest)
             except material.SelectError as e:
                 return JSONResponse({"error": str(e)}, status_code=422)
             ok = result is not None
@@ -365,6 +431,13 @@ def routes(c: Context):
                "ui_language": c.lang_of(request)}
         status, ctype, data = await anyio.to_thread.run_sync(
             reviews.api, p["id"], request.method, path, request.url.query, body, user, app)
+        guest = guest_of(request)
+        if guest and request.method == "POST" and path == "/api/entries" and status in (200, 201) and jobs.notifier:
+            try:
+                cut = json.loads(body).get("cut")
+            except (ValueError, AttributeError):
+                cut = None
+            jobs.notifier.guest_activity(p, guest, "comment", cut)
         return Response(data, status_code=status, media_type=ctype, headers={"cache-control": "no-store"})
 
     async def review_app_file(request):
@@ -445,6 +518,10 @@ def routes(c: Context):
         Route("/api/projects/{pid}/selects", api_selects, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/selects/{sid}", api_select, methods=["PATCH", "DELETE"]),
         Route("/api/projects/{pid}/tags", api_tags, methods=["POST"]),
+        Route("/api/projects/{pid}/suggestions", api_suggestions, methods=["POST"]),
+        Route("/projects/{pid}/share", share_page),
+        Route("/api/projects/{pid}/shares", api_shares, methods=["GET", "POST"]),
+        Route("/api/projects/{pid}/shares/{sid}", api_share, methods=["DELETE"]),
         Route("/api/projects/{pid}/review/note", api_review_note, methods=["GET", "PUT"]),
         Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),
         Route("/projects/{pid}/analysis/{kind}/{name}", analysis_file),

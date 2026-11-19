@@ -175,6 +175,16 @@ milestone (and before any model switch), so a fresh session can continue without
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
 - 0.2.9 (2026-11-19), cutter 0.7.0: project format (16:9 film, 9:16 reel, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9),
   reframing onto faces and people; see "Formats" below.
+- 0.4.0 (2026-11-19): sharing a project with a friend (share.py): Project → Share makes a link
+  per person (/s/<id>.<secret>, SHA-256 of the secret in the `shares` table, migration 008; 7/30/90 days or until
+  withdrawn); the link sets an HttpOnly cookie, and requests with it and without Basic Auth may only use the paths in
+  share.GUEST_PATHS of that project (review page, cutter's review API for cuts/entries – comments under the guest's
+  name, own ones changeable; review media; material page and data; suggestions); other HTML pages redirect to the
+  review, everything else is 403. A guest's favourites/rejects/tags go into DATA/suggestions.json ("by"), which Claude
+  does not read; the owner takes them over (into selects.json, note "(Alex)") or declines them on the material page.
+  Telegram/webhook message per guest, collected for two minutes ("Alex wrote 3 comments on cut 2"). Material page:
+  "compare with cut N" (any cut): share of the clip used, blue line of the used parts on tiles and in the monitor,
+  filter "left out of cut N with ≥ 5 s usable".
 - 0.3.1 (2026-11-19): sharp tiles (a 640 px still from the stand-in, made once:
   WORK/posters/<ID>.jpg; the film strip until it is there), the monitor's bar and key hints no longer squeezed in low
   windows; tags managed: own tags renamed / deleted everywhere (popover "Edit"), removed from chosen clips, automatic

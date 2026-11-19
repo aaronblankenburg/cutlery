@@ -82,6 +82,12 @@ To reach it from outside, put a reverse proxy with HTTPS in front:
 - [`examples/Caddyfile`](examples/Caddyfile) – the same for Caddy, which also fetches the certificate.
 - [`examples/fail2ban/`](examples/fail2ban/) – a filter and a jail that ban addresses with many failed logins. Cutlery itself locks an address out for 15 minutes after 20 failed logins.
 
+**Sharing with friends.** Project → *Share* makes a link per person (`https://…/s/<token>`, valid 7/30/90 days or
+until withdrawn). Whoever opens it can watch the cuts, comment (under the name you gave), look through the footage
+and suggest favourites, rejects and tags, which you take over or not; nothing else – the password still guards
+everything else. Only a hash of the token is stored; withdrawing a link stops it at once. The `/s/` path must reach
+Cutlery through the proxy like every other path (the examples do).
+
 If the proxy runs in a Docker container on the same host, set `CUTLERY_BIND=0.0.0.0` only if the port is not
 reachable from outside otherwise, and list the proxy's network in `CUTLERY_TRUSTED_PROXIES`.
 

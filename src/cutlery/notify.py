@@ -53,6 +53,10 @@ def mqtt_publish(host, port, topic, payload: bytes, user=None, password=None, ti
         s.sendall(disconnect)
 
 
+_guest_lock = threading.Lock()
+_guest_pending: dict = {}
+
+
 class Notifier:
     def __init__(self, cfg, telegram=None):
         self.cfg, self.telegram = cfg, telegram
@@ -78,6 +82,45 @@ class Notifier:
         if self.enabled:
             data = {"event": "egress_asked", "project": {"id": project["id"], "name": project["name"]},
                     "job": {"id": job["id"], "cut": job.get("cut")}, "domain": domain}
+            threading.Thread(target=self.send, args=(data,), daemon=True).start()
+
+    # a guest's comments and suggestions: one message for what came within GUEST_WAIT_S of the first
+    GUEST_WAIT_S = 120
+
+    def guest_activity(self, project, name: str, kind: str, cut: str | None = None) -> None:
+        """kind: "comment" (on `cut`) or "suggestion"."""
+        if not (self.telegram or self.enabled):
+            return
+        key = (project["id"], name)
+        with _guest_lock:
+            pending = _guest_pending.get(key)
+            if pending is None:
+                pending = _guest_pending[key] = {"comment": 0, "suggestion": 0, "cuts": set()}
+                timer = threading.Timer(self.GUEST_WAIT_S, self._guest_flush, args=(project, name))
+                timer.daemon = True
+                timer.start()
+            pending[kind] += 1
+            if cut:
+                pending["cuts"].add(cut)
+
+    def _guest_flush(self, project, name) -> None:
+        import re
+        with _guest_lock:
+            p = _guest_pending.pop((project["id"], name), None)
+        if not p:
+            return
+        cuts = ", ".join(sorted((re.findall(r"\d+", c) or [c])[-1] for c in p["cuts"]))
+        url = (f"\n{self.cfg.public_url.rstrip('/')}/projects/{project['id']}/review" if self.cfg.public_url else "")
+        if self.telegram:
+            if p["comment"]:
+                self.telegram.send("telegram.msg.guest_comments", project=project["name"], name=name, n=p["comment"],
+                                   cuts=cuts, url=url)
+            if p["suggestion"]:
+                self.telegram.send("telegram.msg.guest_suggestions", project=project["name"], name=name,
+                                   n=p["suggestion"], url=url.replace("/review", "/material"))
+        if self.enabled:
+            data = {"event": "guest_activity", "project": {"id": project["id"], "name": project["name"]},
+                    "guest": name, "comments": p["comment"], "suggestions": p["suggestion"], "cuts": sorted(p["cuts"])}
             threading.Thread(target=self.send, args=(data,), daemon=True).start()
 
     def analysis_done(self, project, clips: int) -> None:

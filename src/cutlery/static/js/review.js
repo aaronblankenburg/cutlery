@@ -6,6 +6,7 @@ import { load, t } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const project = $('review').dataset.project;
+const guest = $('review').dataset.guest || null;       // a friend with a shared link: comments only
 const frame = $('review-frame');
 let cuts = [], shown = null, open = 0;
 
@@ -51,9 +52,9 @@ function render() {
   if (!cut) return;
   const isNewest = cut === newest;
   const done = $('review-done');
-  done.hidden = !isNewest || cut.locked;
+  done.hidden = !isNewest || cut.locked || !!guest;
   done.textContent = t('review.done', { n: num(cut.id) + 1 });
-  $('next-note').hidden = !isNewest || cut.locked;
+  $('next-note').hidden = !isNewest || cut.locked || !!guest;
   $('next-note-label').textContent = t('review.note_label', { n: num(cut.id) + 1 });
   $('next-note-text').placeholder = t('review.note_placeholder', { n: num(cut.id) + 1 });
   const n = cut.id === shown ? open : cut.open;
@@ -98,7 +99,7 @@ noteBox.addEventListener('input', filled);
 noteBox.addEventListener('input', () => { noteState('review.note_unsaved'); clearTimeout(noteTimer); noteTimer = setTimeout(saveNote, 800); });
 noteBox.addEventListener('blur', saveNote);
 addEventListener('beforeunload', (e) => { if (noteBox.value !== noteSaved) { saveNote(); e.preventDefault(); } });
-try {
+if (!guest) try {
   const d = await api(`/api/projects/${project}/review/note`);
   noteBox.value = noteSaved = d.text;
   filled();

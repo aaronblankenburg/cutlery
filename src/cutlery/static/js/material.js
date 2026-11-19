@@ -11,6 +11,13 @@ import { duration as fmtDuration } from './format.js';
 const $ = (id) => document.getElementById(id);
 const root = $('material');
 const project = root.dataset.project;
+// a friend with a shared link (share.py): their favourites, rejects and tags are suggestions the owner takes over or
+// not; the owner's own selection is shown to them, but not changeable
+const GUEST = root.dataset.guest || null;
+if (GUEST) {
+  for (const id of ['m-tags-edit', 'm-sel-untag']) document.getElementById(id).hidden = true;
+  document.body.classList.add('guest');
+}
 const FPS = 25;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(`cutlery-material-${k}`); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -18,7 +25,7 @@ const store = {
 };
 const S = { clips: [], byId: new Map(), days: [], people: new Map(), cuts: [], selects: [], shown: [], open: null,
   rIn: null, rOut: null, words: [], speed: 0, detail: null, chosen: new Set(), anchor: null,
-  hidden: { all: [], clips: {} }, editTags: false };
+  hidden: { all: [], clips: {} }, editTags: false, suggestions: [] };
 
 await load();
 
@@ -48,6 +55,8 @@ function dayTitle(day) {
 }
 const dayShort = (day) => (day ? new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'numeric' }).format(new Date(`${day}T12:00:00`)) : '?');
 const marksOf = (cid) => S.selects.filter((s) => s.clip === cid);
+const mine = (s) => (GUEST ? { ...s, suggested: true } : s);         // what a guest adds is a suggestion
+const suggOf = (cid) => S.suggestions.filter((s) => s.clip === cid);
 const userTagsOf = (cid) => marksOf(cid).filter((s) => s.kind === 'tag');
 // tags: "u:<name>" the user's own, "c:" what is in the picture, "o:" objects, "m:" camera moves
 const KINDS = [['u', 'material.tags_mine'], ['c', 'material.tags_content'], ['o', 'material.tags_objects'], ['m', 'material.tags_moves']];
@@ -66,12 +75,40 @@ const clipUrl = (cid) => `/projects/${project}/analysis/clip/${encodeURIComponen
 const stripUrl = (cid) => `/projects/${project}/analysis/strips/${encodeURIComponent(cid)}.jpg`;
 const posterUrl = (cid) => `/projects/${project}/material/poster/${encodeURIComponent(cid)}.jpg`;
 const latestCut = () => S.cuts[S.cuts.length - 1] || null;
+// the cut the page compares the footage with (chosen at the top; the newest by default)
+const selCut = () => (F.cut && S.cuts.includes(F.cut) ? F.cut : latestCut());
+const REST_MIN = 5;                                  // seconds of usable footage left out that make a clip worth a look
+function merge(rs) {
+  const out = [];
+  for (const [a, b] of rs.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0])) {
+    if (out.length && a <= out[out.length - 1][1] + 0.05) out[out.length - 1][1] = Math.max(out[out.length - 1][1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+// where a cut uses a clip (shots and cutaways), merged
+const usedRanges = (c, cut = selCut()) => merge(c.used.filter((u) => u.cut === cut && u.in != null && u.out != null)
+  .map((u) => [Number(u.in), Number(u.out)]));
+const total = (rs) => rs.reduce((s, [a, b]) => s + b - a, 0);
+// usable seconds the cut leaves out
+function restOf(c, cut = selCut()) {
+  const used = usedRanges(c, cut);
+  let rest = 0;
+  for (const [a, b] of c.usable) {
+    let left = b - a;
+    for (const [x, y] of used) left -= Math.max(0, Math.min(b, y) - Math.max(a, x));
+    rest += Math.max(0, left);
+  }
+  return rest;
+}
 
 // ------------------------------------------------------------------ data
 
 async function refresh() {
   const d = await api(`/api/projects/${project}/material`);
-  S.clips = d.clips; S.days = d.days; S.cuts = d.cuts; S.selects = d.selects; S.hidden = d.hidden || { all: [], clips: {} };
+  S.clips = d.clips; S.days = d.days; S.cuts = d.cuts; S.hidden = d.hidden || { all: [], clips: {} };
+  S.suggestions = d.suggestions || [];
+  S.selects = GUEST ? [...d.selects.map((x) => ({ ...x, readonly: true })), ...S.suggestions.map(mine)] : d.selects;
   S.byId = new Map(S.clips.map((c) => [c.id, c]));
   S.people = new Map(d.people.map((p) => [p.id, p.name]));
   for (const id of [...S.chosen]) if (!S.byId.has(id)) S.chosen.delete(id);
@@ -92,9 +129,16 @@ function options() {
   const cams = [...new Set(S.clips.map((c) => c.camera))].sort();
   fill($('m-camera'), cams.map((c) => [c, c]));
   fill($('m-person'), [...S.people].map(([id, name]) => [id, name]));
-  const latest = latestCut();
+  const cutSel = $('m-cut');
+  cutSel.textContent = '';
+  cutSel.hidden = !S.cuts.length;
+  for (const cut of [...S.cuts].reverse()) cutSel.append(new Option(cut === latestCut() ? t('material.cut_latest', { cut }) : t('material.cut_name', { cut }), cut));
+  cutSel.value = selCut() || '';
+  const latest = selCut();
   $('m-used').options[1].textContent = latest ? t('material.used_in', { cut: latest }) : t('material.used_yes');
   $('m-used').options[2].textContent = latest ? t('material.unused_in', { cut: latest }) : t('material.used_no');
+  $('m-used').options[3].textContent = latest ? t('material.rest_in', { cut: latest, n: REST_MIN }) : t('material.used_rest');
+  $('m-used').options[3].hidden = !latest;
   tagNames();
 }
 
@@ -113,6 +157,7 @@ const F = store.get('filters', {});
 for (const [id, key] of [['m-camera', 'camera'], ['m-person', 'person'], ['m-used', 'used'], ['m-mark', 'mark']]) {
   $(id).addEventListener('change', () => { F[key] = $(id).value; store.set('filters', F); render(); });
 }
+$('m-cut').addEventListener('change', () => { F.cut = $('m-cut').value; store.set('filters', F); options(); render(); if (S.open) track(); });
 $('m-speech').checked = !!F.speech;
 $('m-speech').addEventListener('change', () => { F.speech = $('m-speech').checked; store.set('filters', F); render(); });
 let searchTimer = null;
@@ -124,14 +169,16 @@ function passes(c) {
   if (F.camera && c.camera !== F.camera) return false;
   if (F.person && !c.people.includes(F.person)) return false;
   if (F.speech && !c.words) return false;
-  const latest = latestCut();
+  const latest = selCut();
   if (F.used === 'used' && !c.used.some((u) => u.cut === latest)) return false;
   if (F.used === 'unused' && c.used.some((u) => u.cut === latest)) return false;
+  if (F.used === 'rest' && restOf(c, latest) < REST_MIN) return false;
   const kinds = new Set(marksOf(c.id).map((m) => m.kind));
   if (F.mark === 'favorite' && !kinds.has('favorite')) return false;
   if (F.mark === 'reject' && !kinds.has('reject')) return false;
   if (F.mark === 'none' && [...kinds].some((k) => k !== 'tag')) return false;
   for (const key of F.tags || []) if (!clipHas(c, key)) return false;
+  if (S.suggOnly && !suggOf(c.id).length) return false;
   return true;
 }
 
@@ -308,8 +355,10 @@ root.style.setProperty('--tile', `${size}px`);
 
 function render() {
   for (const [id, key] of [['m-camera', 'camera'], ['m-person', 'person'], ['m-used', 'used'], ['m-mark', 'mark']]) $(id).value = F[key] || '';
+  if (S.suggOnly && !S.suggestions.length) S.suggOnly = false;
   S.shown = S.clips.filter(passes);
   activeTags();
+  suggBar();
   selection();
   $('m-count').textContent = t('material.count', { n: S.shown.length, all: S.clips.length });
   const body = $('m-body');
@@ -347,12 +396,23 @@ function badges(c) {
   const box = el('span', 'tile-badges');
   if (c.words) box.append(el('span', 'badge', `🗣 ${c.words}`));
   if (c.people.length) box.append(el('span', 'badge', `👤 ${c.people.map((p) => S.people.get(p) || p).join(', ')}`));
-  const latest = latestCut();
+  const latest = selCut();
   const used = c.used.filter((u) => u.cut === latest);
-  if (used.length) box.append(el('span', 'badge used', `✂ ${latest} · ${used.map((u) => u.nr).join(', ')}`));
+  if (used.length) {
+    const share = Math.round((100 * total(usedRanges(c, latest))) / Math.max(0.1, c.duration || 0));
+    const b = el('span', 'badge used', `✂ ${latest} · ${[...new Set(used.map((u) => u.nr))].join(', ')} · ${share} %`);
+    b.title = t('material.used_share', { cut: latest, share, rest: Math.round(restOf(c, latest)) });
+    box.append(b);
+  }
   const kinds = new Set(marksOf(c.id).map((m) => m.kind));
   if (kinds.has('favorite')) box.append(el('span', 'badge fav', '★'));
   if (kinds.has('reject')) box.append(el('span', 'badge rej', '⊘'));
+  const sugg = GUEST ? [] : suggOf(c.id);
+  if (sugg.length) {
+    const b = el('span', 'badge sugg', `💡 ${sugg.length}`);
+    b.title = t('material.sugg_tile', { names: [...new Set(sugg.map((s) => s.by))].join(', ') });
+    box.append(b);
+  }
   // tags: the user's own (accent) first, then what is in the picture; three at most, "+n" for the rest
   const own = [...new Set(userTagsOf(c.id).map((m) => m.tag))].map((n) => ['u', n]);
   const found = (c.tags || []).map(([n]) => ['c', n]);
@@ -364,6 +424,20 @@ function badges(c) {
     box.append(more);
   }
   return box;
+}
+
+// the parts of the clip in the chosen cut, as a line under the quality bar
+function usedBar(c, cls = 'ubar') {
+  const bar = el('div', cls);
+  const d = c.duration || 1, cut = selCut();
+  for (const [a, b] of cut ? usedRanges(c, cut) : []) {
+    const s = el('span');
+    s.style.left = `${(a / d) * 100}%`;
+    s.style.width = `${Math.max(0.6, ((b - a) / d) * 100)}%`;
+    bar.append(s);
+  }
+  if (cut) bar.title = bar.children.length ? t('material.used_bar', { cut }) : t('material.unused_in', { cut });
+  return bar;
 }
 
 function qualityBar(c, cls = 'qbar') {
@@ -403,7 +477,7 @@ function grid(clips) {
     pick.setAttribute('aria-label', t('material.sel_clip', { file: c.file }));
     pick.addEventListener('click', (e) => { e.stopPropagation(); choose(c.id, e.shiftKey ? 'range' : 'toggle'); });
     pic.append(pick);
-    tile.append(pic, qualityBar(c));
+    tile.append(pic, qualityBar(c), usedBar(c));
     const name = el('div', 'tile-name', c.file);
     name.title = `${c.id} · ${c.rel_path} · ${c.camera}`;
     tile.append(name, badges(c));
@@ -497,6 +571,59 @@ function scrubEnd() {
   scrub = null;
 }
 
+// ------------------------------------------------------------------ guests' suggestions (the owner's view)
+
+function suggBar() {
+  const bar = $('m-sugg');
+  bar.textContent = '';
+  bar.hidden = GUEST || !S.suggestions.length;
+  if (bar.hidden) return;
+  const by = new Map();
+  for (const s of S.suggestions) by.set(s.by, (by.get(s.by) || 0) + 1);
+  bar.append(el('span', null, `💡 ${[...by].map(([n, k]) => t(k === 1 ? 'material.sugg_from_one' : 'material.sugg_from', { name: n, n: k })).join(' · ')}`));
+  const btn = (label, fn, cls = '') => { const b = el('button', cls, label); b.type = 'button'; b.addEventListener('click', fn); bar.append(b); };
+  btn(S.suggOnly ? t('material.sugg_all_clips') : t('material.sugg_only'), () => { S.suggOnly = !S.suggOnly; render(); });
+  btn(t('material.sugg_accept_all'), () => decide(S.suggestions.map((s) => s.id), true), 'ok');
+  btn(t('material.sugg_decline_all'), () => {
+    if (confirm(t('material.sugg_decline_confirm', { n: S.suggestions.length }))) decide(S.suggestions.map((s) => s.id), false);
+  });
+}
+async function decide(ids, accept) {
+  try {
+    const r = await api(`/api/projects/${project}/suggestions`, { method: 'POST', body: JSON.stringify({ action: accept ? 'accept' : 'decline', ids }) });
+    S.selects = r.selects; S.suggestions = r.suggestions;
+    tagNames(); render();
+    if (S.open) { showMarks(); showTags(); track(); }
+  } catch (e) { alert(e.message); }
+}
+function suggLabel(s, c) {
+  const what = s.kind === 'favorite' ? `★ ${t('material.favorite')}` : s.kind === 'reject' ? `⊘ ${t('material.reject')}` : `🏷 ${s.tag}`;
+  const where = s.in == null ? t('material.whole_clip') : `${mmss(s.in)}–${mmss(s.out)}`;
+  return `${what} · ${where}${s.note ? ` – ${s.note}` : ''}`;
+}
+function showSuggestions() {
+  const ul = $('mon-sugg');
+  ul.textContent = '';
+  const list = GUEST ? [] : suggOf(S.open);
+  ul.hidden = !list.length;
+  if (!list.length) return;
+  ul.append(el('li', 'small muted', t('material.sugg_title')));
+  for (const s of list) {
+    const li = el('li', 'mark suggested');
+    const go = el('button', 'mark-label', `${s.by}: ${suggLabel(s)}`);
+    go.type = 'button';
+    go.addEventListener('click', () => seek(s.in ?? 0));
+    const yes = el('button', 'ok', '✓'), no = el('button', 'mark-del', '✕');
+    yes.type = no.type = 'button';
+    yes.title = t('material.sugg_accept'); no.title = t('material.sugg_decline');
+    yes.setAttribute('aria-label', yes.title); no.setAttribute('aria-label', no.title);
+    yes.addEventListener('click', () => decide([s.id], true));
+    no.addEventListener('click', () => decide([s.id], false));
+    li.append(go, yes, no);
+    ul.append(li);
+  }
+}
+
 // ------------------------------------------------------------------ several clips at once
 
 function choose(cid, how) {
@@ -524,7 +651,7 @@ function selection() {
 async function addMany(items, done) {
   try {
     const r = await api(`/api/projects/${project}/selects`, { method: 'POST', body: JSON.stringify({ items }) });
-    for (const s of r.selects) if (!S.selects.some((x) => x.id === s.id)) S.selects.push(s);
+    for (const s of r.selects) if (!S.selects.some((x) => x.id === s.id)) S.selects.push(mine(s));
     tagNames();
     render();
     flashBar(done);
@@ -568,7 +695,7 @@ function table(clips) {
   const head = tb.createTHead().insertRow();
   for (const k of ['time', 'file', 'duration', 'camera', 'speech', 'people', 'tags', 'used', 'mark']) head.append(el('th', null, t(`material.col.${k}`)));
   const body = tb.createTBody();
-  const latest = latestCut();
+  const latest = selCut();
   for (const c of clips) {
     const r = body.insertRow();
     if (S.chosen.has(c.id)) r.className = 'chosen';
@@ -678,8 +805,9 @@ function transcript(d) {
 function showMarks() {
   const ul = $('mon-marks');
   ul.textContent = '';
+  showSuggestions();
   for (const m of marksOf(S.open).filter((x) => x.kind !== 'tag')) {
-    const li = el('li', `mark ${m.kind}`);
+    const li = el('li', `mark ${m.kind}${m.suggested ? ' suggested' : ''}`);
     const label = el('button', 'mark-label', `${m.kind === 'favorite' ? '★' : '⊘'} ${m.in == null ? t('material.whole_clip') : `${mmss(m.in)}–${mmss(m.out)}`}`);
     label.type = 'button';
     label.title = t('material.mark_jump');
@@ -700,6 +828,7 @@ function showMarks() {
         showMarks(); track();
       } catch (e) { alert(e.message); }
     });
+    if (m.readonly) { note.disabled = true; del.hidden = true; }
     li.append(label, note, del);
     ul.append(li);
   }
@@ -722,7 +851,7 @@ function showTags() {
   const own = $('mon-utags');
   own.textContent = '';
   for (const m of userTagsOf(c.id)) {
-    const chip = el('span', 'tag-chip k-u on');
+    const chip = el('span', `tag-chip k-u on${m.suggested ? ' suggested' : ''}`);
     const go = el('button', 'tag-go', `${m.tag}${m.in == null ? '' : ` · ${mmss(m.in)}–${mmss(m.out)}`}`);
     go.type = 'button';
     go.title = m.in == null ? t('material.whole_clip') : t('material.mark_jump');
@@ -739,6 +868,7 @@ function showTags() {
         showTags(); track(); tagNames();
       } catch (e) { alert(e.message); }
     });
+    if (m.readonly) del.hidden = true;
     chip.append(go, del);
     own.append(chip);
   }
@@ -764,6 +894,7 @@ function showTags() {
         seek(next[0]);
       });
       hover(b, rs);
+      if (GUEST) { row.append(b); continue; }
       const wrap = el('span', 'tag-pair');
       const x = el('button', 'tag-hide', '×');
       x.type = 'button';
@@ -812,7 +943,7 @@ $('mon-tag-form').addEventListener('submit', async (e) => {
   }
   try {
     const s = await api(`/api/projects/${project}/selects`, { method: 'POST', body: JSON.stringify(body) });
-    if (!S.selects.some((x) => x.id === s.id)) S.selects.push(s);
+    if (!S.selects.some((x) => x.id === s.id)) S.selects.push(mine(s));
     input.value = '';
     S.rIn = S.rOut = null;
     showRange(); showTags(); track(); tagNames();
@@ -831,11 +962,11 @@ async function mark(kind) {
   }
   try {
     const s = await api(`/api/projects/${project}/selects`, { method: 'POST', body: JSON.stringify(body) });
-    S.selects.push(s);
+    S.selects.push(mine(s));
     $('mon-note').value = '';
     S.rIn = S.rOut = null;
     showRange(); showMarks(); track();
-    flash(kind === 'favorite' ? t('material.saved_favorite') : t('material.saved_reject'));
+    flash(GUEST ? t('guest.saved_suggestion') : kind === 'favorite' ? t('material.saved_favorite') : t('material.saved_reject'));
   } catch (e) { alert(e.message); }
 }
 $('mon-fav').addEventListener('click', () => mark('favorite'));
@@ -858,6 +989,16 @@ function track() {
   const sl = $('mon-selects');
   sl.textContent = '';
   const d = c.duration || 1;
+  const cl = $('mon-cutl');
+  cl.textContent = '';
+  const cut = selCut();
+  for (const u of cut ? c.used.filter((x) => x.cut === cut && x.in != null) : []) {
+    const s = el('span', 'msel cutuse');
+    s.style.left = `${(u.in / d) * 100}%`;
+    s.style.width = `${Math.max(0.4, ((u.out - u.in) / d) * 100)}%`;
+    s.title = t(u.cutaway ? 'material.used_cutaway' : 'material.used_shot', { cut, nr: u.nr, a: mmss(u.in), b: mmss(u.out) });
+    cl.append(s);
+  }
   const tl = $('mon-tagl');
   tl.textContent = '';
   for (const m of userTagsOf(c.id)) {

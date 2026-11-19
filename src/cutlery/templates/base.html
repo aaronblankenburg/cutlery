@@ -10,7 +10,10 @@
 </head>
 <body data-lang="{{ lang }}">
   <header class="site-header">
-    <a class="wordmark" href="/"><img src="/static/img/logo.svg" alt=""><span>Cut<span class="accent">lery</span></span></a>
+    <a class="wordmark" href="{{ '/projects/' ~ guest.project_id ~ '/review' if guest else '/' }}"><img src="/static/img/logo.svg" alt=""><span>Cut<span class="accent">lery</span></span></a>
+    {% if guest %}
+    <span class="guest-badge small">{{ t('guest.badge', name=guest.name) }}</span>
+    {% else %}
     <nav class="site-nav" aria-label="{{ t('nav.label') }}">
       <a href="/" {% if nav == 'projects' %}aria-current="page"{% endif %}>{{ t('nav.projects') }}</a>
       <a href="/projects/new" {% if nav == 'new' %}aria-current="page"{% endif %}>{{ t('nav.new_project') }}</a>
@@ -22,6 +25,7 @@
       {% else %}<span class="error">{{ t('header.claude_none') }}</span>{% endif %}
       <span>{{ t('header.queue', running=queue, queued=queued) if queue or queued else t('header.queue_empty') }}</span>
     </div>
+    {% endif %}
     <div class="lang-switch" role="group" aria-label="{{ t('nav.language') }}">
       {% for code, name in languages %}
       <a href="/lang/{{ code }}?next={{ request.url.path | urlencode }}" lang="{{ code }}" title="{{ name }}"
@@ -29,11 +33,11 @@
       {% endfor %}
     </div>
   </header>
-  {% if claude.missing %}<div class="banner warn" role="status">{{ t('claude.missing') }}</div>{% endif %}
-  {% if claude.warn %}<div class="banner warn" role="status">{{ t('claude.token_warning', days=claude.days, date=claude.expires) }}</div>{% endif %}
+  {% if claude.missing and not guest %}<div class="banner warn" role="status">{{ t('claude.missing') }}</div>{% endif %}
+  {% if claude.warn and not guest %}<div class="banner warn" role="status">{{ t('claude.token_warning', days=claude.days, date=claude.expires) }}</div>{% endif %}
   <main class="{% block main_class %}{% endblock %}">{% block main %}{% endblock %}</main>
   <footer class="site-footer">
-    {% for d in disks %}
+    {% for d in disks if not guest %}
     <span class="disk{% if d.low %} low{% endif %}" data-bytes="{{ d.free }}">{{ t('disk.' + d.name) }}: <span class="js-size" data-bytes="{{ d.free }}">{{ (d.free / 1e9) | round(1) }} GB</span> {{ t('disk.free') }}{% if d.low %} · {{ t('disk.low') }}{% endif %}</span>
     {% endfor %}
     <span class="disk">Cutlery {{ version }}</span>

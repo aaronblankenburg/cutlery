@@ -134,7 +134,7 @@ def footage(paths: ProjectPaths, known_rel_paths: set[str]) -> dict:
         for kind, field in KIND_FIELDS.items():
             r[field] = [x for x in r[field] if f"{kind}:{x[0]}" not in gone]
     return {"clips": rows, "days": days, "people": people, "cuts": cuts, "selects": load(paths)["selects"],
-            "hidden": hide}
+            "hidden": hide, "suggestions": suggestions(paths)}
 
 
 def _seconds(rs) -> float:
@@ -330,19 +330,54 @@ def transcript(paths: ProjectPaths, cid: str) -> dict:
 
 # ---------------------------------------------------------------- the selection
 
-def _file(paths: ProjectPaths):
-    return paths.data / "selects.json"
+# A guest's favourites, rejects and tags (share.py) are suggestions: the same entries with "by" (the guest's name) in
+# suggestions.json, which Claude does not read; the owner takes them over into selects.json (accept) or not.
+
+def _file(paths: ProjectPaths, by: str | None = None):
+    return paths.data / ("suggestions.json" if by else "selects.json")
 
 
-def load(paths: ProjectPaths) -> dict:
-    d = _read(_file(paths))
+def load(paths: ProjectPaths, by: str | None = None) -> dict:
+    """selects.json; with `by` the suggestions (all of them: filter on "by" for one guest's)."""
+    d = _read(_file(paths, by))
     if not isinstance(d, dict) or not isinstance(d.get("selects"), list):
         return {"version": 1, "selects": []}
     return d
 
 
-def _save(paths: ProjectPaths, d: dict) -> None:
-    write_atomic(_file(paths), (json.dumps(d, ensure_ascii=False, indent=1) + "\n").encode())
+def _save(paths: ProjectPaths, d: dict, by: str | None = None) -> None:
+    write_atomic(_file(paths, by), (json.dumps(d, ensure_ascii=False, indent=1) + "\n").encode())
+
+
+def suggestions(paths: ProjectPaths, by: str | None = None) -> list[dict]:
+    """The guests' suggestions (one guest's with `by`)."""
+    return [x for x in load(paths, by="*")["selects"] if by is None or x.get("by") == by]
+
+
+def decide(paths: ProjectPaths, ids, accept: bool) -> dict:
+    """Take suggestions over into the selection (accept) or drop them. Returns {"done", "selects", "suggestions"}."""
+    if not isinstance(ids, list) or not ids or not all(isinstance(i, str) for i in ids):
+        raise SelectError("ids: a list of suggestion IDs")
+    with _lock:
+        sug = load(paths, by="*")
+        chosen = [x for x in sug["selects"] if x.get("id") in ids]
+        sug["selects"] = [x for x in sug["selects"] if x.get("id") not in ids]
+        d = load(paths)
+        if accept and chosen:
+            n = max([int(x["id"][1:]) for x in d["selects"] if re.match(r"^s\d+$", str(x.get("id")))] or [0])
+            same = lambda a, b: all(a.get(k) == b.get(k) for k in ("clip", "kind", "tag", "in", "out"))
+            for x in chosen:
+                if any(same(x, y) for y in d["selects"]):
+                    continue
+                n += 1
+                entry = {k: v for k, v in x.items() if k not in ("id", "by")}
+                if x.get("by"):
+                    note = entry.get("note") or ""
+                    entry["note"] = f"{note} ({x['by']})".strip() if note else f"({x['by']})"
+                d["selects"].append({"id": f"s{n}", **entry})
+            _save(paths, d)
+        _save(paths, sug, by="*")
+        return {"done": len(chosen), "selects": d["selects"], "suggestions": sug["selects"]}
 
 
 def _check(body: dict, clips: dict[str, dict], old: dict | None = None) -> dict:
@@ -385,54 +420,58 @@ def _check(body: dict, clips: dict[str, dict], old: dict | None = None) -> dict:
     return s
 
 
-def add(paths: ProjectPaths, body: dict, clips: dict[str, dict]) -> dict:
-    return add_many(paths, [body], clips)[0]
+def add(paths: ProjectPaths, body: dict, clips: dict[str, dict], by: str | None = None) -> dict:
+    return add_many(paths, [body], clips, by)[0]
 
 
-def add_many(paths: ProjectPaths, bodies: list[dict], clips: dict[str, dict]) -> list[dict]:
+def add_many(paths: ProjectPaths, bodies: list[dict], clips: dict[str, dict], by: str | None = None) -> list[dict]:
     """Several entries at once (one tag for the clips chosen on the page); all or none. The same tag on the same
-    range of a clip is not added twice."""
+    range of a clip is not added twice. With `by` (a guest) they go into the suggestions."""
     if not isinstance(bodies, list) or not 0 < len(bodies) <= BATCH_MAX:
         raise SelectError(f"1 to {BATCH_MAX} entries")
+    prefix = "g" if by else "s"
     with _lock:
-        d = load(paths)
+        d = load(paths, by)
         checked = [_check(b if isinstance(b, dict) else {}, clips) for b in bodies]
-        n = max([int(x["id"][1:]) for x in d["selects"] if re.match(r"^s\d+$", str(x.get("id")))] or [0])
+        n = max([int(x["id"][1:]) for x in d["selects"] if re.match(rf"^{prefix}\d+$", str(x.get("id")))] or [0])
         stamp = dt.datetime.now().astimezone().isoformat(timespec="seconds")
-        same = lambda a, b: all(a.get(k) == b.get(k) for k in ("clip", "kind", "tag", "in", "out"))
+        same = lambda a, b: all(a.get(k) == b.get(k) for k in ("clip", "kind", "tag", "in", "out", "by"))
         out = []
         for s in checked:
+            if by:
+                s["by"] = by
             old = next((x for x in d["selects"] if s["kind"] == "tag" and same(x, s)), None)
             if old:
                 out.append(old)
                 continue
             n += 1
-            s = {"id": f"s{n}", **s, "created": stamp}
+            s = {"id": f"{prefix}{n}", **s, "created": stamp}
             d["selects"].append(s)
             out.append(s)
-        _save(paths, d)
+        _save(paths, d, by)
         return out
 
 
-def change(paths: ProjectPaths, sid: str, body: dict, clips: dict[str, dict]) -> dict | None:
+def change(paths: ProjectPaths, sid: str, body: dict, clips: dict[str, dict], by: str | None = None) -> dict | None:
+    """Change an entry; a guest only their own suggestions."""
     with _lock:
-        d = load(paths)
+        d = load(paths, by)
         for i, x in enumerate(d["selects"]):
-            if x.get("id") == sid:
-                d["selects"][i] = _check(body, clips, x)
-                _save(paths, d)
+            if x.get("id") == sid and (by is None or x.get("by") == by):
+                d["selects"][i] = _check({k: v for k, v in body.items() if k != "by"}, clips, x)
+                _save(paths, d, by)
                 return d["selects"][i]
         return None
 
 
-def remove(paths: ProjectPaths, sid: str) -> bool:
+def remove(paths: ProjectPaths, sid: str, by: str | None = None) -> bool:
     with _lock:
-        d = load(paths)
-        keep = [x for x in d["selects"] if x.get("id") != sid]
+        d = load(paths, by)
+        keep = [x for x in d["selects"] if not (x.get("id") == sid and (by is None or x.get("by") == by))]
         if len(keep) == len(d["selects"]):
             return False
         d["selects"] = keep
-        _save(paths, d)
+        _save(paths, d, by)
         return True
 
 
