@@ -175,12 +175,14 @@ milestone (and before any model switch), so a fresh session can continue without
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
 - 0.2.9 (2026-11-19), cutter 0.7.0: project format (16:9 film, 9:16 reel, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9),
   reframing onto faces and people; see "Formats" below.
+- 0.3.0 (2026-11-19), cutter 0.8.0: content tags (CLIP), own tags and tagging several clips on the material page,
+  analysis parts per project; see "Tags and analysis parts" below. Namibia tagged on the server (179 clips, 25 min).
 
-## Tags and analysis parts (branches `tags` in cutter and Cutlery, not merged yet, 2026-11-19)
+## Tags and analysis parts (0.3.0, cutter 0.8.0, 2026-11-19)
 
 Asked for 2026-11-19 ("alle Tags anzeigen, eigene vergeben – ganzer Clip oder Abschnitt", "CLIP automatisch laden",
 "Nutzer wählt, was die Analyse auswertet", "für Namibia nachziehen").
-- cutter (branch `tags`): content_tags.py – CLIP ViT-B/32 as quantized ONNX (Xenova, 155 MB, in image_analysis.MODELS,
+- cutter 0.8.0: content_tags.py – CLIP ViT-B/32 as quantized ONNX (Xenova, 155 MB, in image_analysis.MODELS,
   so the runner fetches it with the other models; no torch), a pass of its own after the image analysis (ffmpeg, one
   224 px frame a second), tags per second into analysis/image/<ID>.json with `tags_key` (model + lists), summary,
   quality.txt `content` line; about 10x real time on the server (Namibia: 1925 s of footage in 185 s). Default list
