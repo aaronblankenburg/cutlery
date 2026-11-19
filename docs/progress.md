@@ -163,7 +163,7 @@ milestone (and before any model switch), so a fresh session can continue without
   cut2 (89 of 138 shots corrected, dusk/night/fire left alone). Measuring takes about 2 s per clip once
   (analysis/color.json in the DATA project folder). Not done yet from the plan: looks for the whole film (LUTs,
   presets), the Cutlery briefing option, the analysis view with before/after.
-- Material page (branch `material`, not merged yet, 2026-11-19): /projects/<id>/material, tab "Material". The
+- 0.2.8 (2026-11-19), cutter 0.6.1: material page: /projects/<id>/material, tab "Material". The
   footage by day (sticky day headers, day chips), sorted by recording time; tiles with the middle picture of the film
   strip, hover scrub (a muted video follows the pointer), quality bar (usable/steady/flaws), badges (words, people,
   used in the latest cut, marks); size slider; list view. Filters: search in names and transcripts, camera
@@ -171,7 +171,7 @@ milestone (and before any model switch), so a fresh session can continue without
   speech. Source monitor (dialog): 360p copy, J/K/L, frames, I/O, transcript with words (click jumps, current word
   highlighted, unsure parts in italics), where the clip is used (links to the review), marks: F favourite, X reject,
   for the In/Out range or the whole clip, with a note. Marks go to DATA/projects/<id>/selects.json (format in cutter
-  docs/formats.md "selects.json", cutter branch `selects`), into briefing.md ("My selection from the footage") and,
+  docs/formats.md "selects.json"), into briefing.md ("My selection from the footage") and,
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
 
 ## Planned: vertical films (Instagram Reels), asked for 2026-11-19
@@ -188,9 +188,10 @@ Plan (to be approved):
    areas for the Reels UI (nothing important in the top ~14 % and bottom ~20 %); a vertical map intro.
 3. cutter skill: Reels guidance (hook in the first 2 s, 15–90 s, cuts on the beat, big burned-in captions), an
    export preset 1080×1920 H.264; a reel can be cut from the footage or derived from a film's cut.
-4. Cutlery: format choice in the briefing (film, reel, both), per cut; review page for tall video (player beside the
-   comments), export page.
-Open question for the user: one project with a film and reels from the same footage (likely), or separate projects.
+4. Cutlery: the format is chosen per project when it is created (film 16:9 or reel 9:16, later 1:1/4:5); review
+   page for tall video (player beside the comments), export page.
+Decided 2026-11-19: reels are their own projects (the footage is uploaded into that project), not a second format
+inside a film's project. Plan approved the same day.
 
 ## Open questions
 
