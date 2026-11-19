@@ -603,7 +603,7 @@ main.full { max-width: none; padding: var(--space-4) var(--space-4) var(--space-
 .material-bar .tag-chip .x:hover { color: var(--text); background: var(--surface-2); }
 .tag-chip.hidden-tag { opacity: 0.7; text-decoration: line-through; }
 .tag-pair { display: inline-flex; align-items: center; }
-.tag-pair .tag-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.monitor .tag-pair .tag-chip { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .monitor .tag-pair .tag-hide { min-height: 30px; padding: 0 8px; margin-left: -1px; border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
   border: 1px dashed var(--border-strong); background: var(--surface-3); color: var(--text-faint); }
 .monitor .tag-pair .tag-hide:hover { color: var(--error-fg); border-color: var(--error-fg); }
