@@ -3,7 +3,7 @@
 # To try unreleased cutter changes, build cutter's image and pass it:
 #   docker build -t cutter:main ../cutter && docker build --build-arg CUTTER_IMAGE=cutter:main -t cutlery:dev .
 ARG CLAUDE_CODE_VERSION=2.1.317
-ARG CUTTER_IMAGE=ghcr.io/aaronblankenburg/cutter:0.6.1@sha256:8b1720f7f68074d86331f3378b7a78efa1369b164eaf58b27fe59a2c08af8312
+ARG CUTTER_IMAGE=ghcr.io/aaronblankenburg/cutter:0.7.0@sha256:420a3d38972b1a4dc57e9c8efe2f8f53ac3c89924f453c84292af7887e646c38
 # Claude Code at a fixed version; the npm package brings the native binary, Node is not needed at run time.
 FROM node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS claude
 ARG CLAUDE_CODE_VERSION

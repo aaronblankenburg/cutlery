@@ -173,11 +173,13 @@ milestone (and before any model switch), so a fresh session can continue without
   for the In/Out range or the whole clip, with a note. Marks go to DATA/projects/<id>/selects.json (format in cutter
   docs/formats.md "selects.json"), into briefing.md ("My selection from the footage") and,
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
+- 0.2.9 (2026-11-19), cutter 0.7.0: project format (16:9 film, 9:16 reel, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9),
+  reframing onto faces and people; see "Formats" below.
 
-## Formats: Reels and other shapes (branches `frame` in cutter and Cutlery, not merged yet, 2026-11-19)
+## Formats: Reels and other shapes (0.2.9, cutter 0.7.0, 2026-11-19)
 
 Asked for 2026-11-19 ("Reels genauso wie hochkant", "mehr gängige Formate"); decided: reels are their own projects.
-- cutter (branch `frame`): frame.py (16:9, 9:16, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9, or WxH) per cut (edit.json
+- cutter 0.7.0: frame.py (16:9, 9:16, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9, or WxH) per cut (edit.json
   "frame", else [timeline] frame); timeline/FCP7/FCPXML/OTIO sequence size, FilmCraft sequence (tested with the real
   filmcraft-cli: 1080x1920 renders), titles/credits/end cards moved into the frame (credits scaled as a block, 9:16
   keeps out of the top 14 % and bottom 22 %), captions margin, map overview, review render 720 lines on the short
