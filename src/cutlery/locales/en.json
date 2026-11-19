@@ -592,5 +592,16 @@
   "material.md.reject": "Rejects",
   "material.md.whole": "whole clip",
   "material.md.range": "{a}–{b}",
-  "material.day_sum_one": "1 clip · {time}"
+  "material.day_sum_one": "1 clip · {time}",
+  "frame.title": "Format",
+  "new.frame_lead": "What you are making. You can change it later; cuts made before keep their format.",
+  "frame.change_note": "Applies to the next cut; earlier cuts keep their format.",
+  "frame.16_9": "Film, landscape (YouTube, TV)",
+  "frame.9_16": "Reel, vertical (Instagram Reels and Stories, TikTok, YouTube Shorts)",
+  "frame.4_5": "Feed post, portrait (Instagram, Facebook)",
+  "frame.3_4": "Portrait (Instagram grid)",
+  "frame.1_1": "Square",
+  "frame.2_3": "Tall pin (Pinterest)",
+  "frame.4_3": "Classic TV",
+  "frame.21_9": "Cinema widescreen"
 }

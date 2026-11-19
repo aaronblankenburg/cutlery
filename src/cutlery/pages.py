@@ -56,7 +56,7 @@ def routes(c: Context):
     async def setup_page(request):
         p = c.project_or_404(request.path_params["pid"])
         st = await state_of(p)
-        return c.page(request, "setup.html", project=p, st=st)
+        return c.page(request, "setup.html", project=p, st=st, frames=cutter_project.FRAMES)
 
     async def footage_redirect(request):
         return RedirectResponse(f"/projects/{request.path_params['pid']}/setup", status_code=301)

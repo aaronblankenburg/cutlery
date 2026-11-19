@@ -10,14 +10,54 @@ import json
 import pathlib
 import re
 
+from cutter.frame import FORMATS
+
 from .storage import ProjectPaths, write_atomic
 
 
 EXPORT_HEIGHT = 360
+FRAMES = tuple(FORMATS)                 # 16:9, 9:16, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9 (cutter docs/formats.md, Frames)
+DEFAULT_FRAME = "16:9"
 
 
 def analysis_dir(paths: ProjectPaths) -> pathlib.Path:
     return paths.work / "analysis"
+
+
+def _settings(paths: ProjectPaths) -> dict:
+    try:
+        d = json.loads((paths.data / "cutlery.json").read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def frame(paths: ProjectPaths) -> str:
+    """The project's picture format: a film (16:9), a reel (9:16), a feed post (4:5, 1:1) …"""
+    f = _settings(paths).get("frame")
+    return f if f in FRAMES else DEFAULT_FRAME
+
+
+def set_frame(paths: ProjectPaths, value: str) -> bool:
+    """Change the picture format (stored in cutlery.json, written to cutter.toml [timeline] frame). The cuts made so
+    far keep theirs: their edit lists get the old one ("frame"), unless they have one. Returns whether it changed."""
+    if value not in FRAMES:
+        raise ValueError(f"frame must be one of {', '.join(FRAMES)}")
+    old = frame(paths)
+    if value == old and (paths.data / "cutlery.json").exists():
+        return False
+    for d in (paths.data / "cuts").glob("*"):
+        edit = d / "edit.json"
+        try:
+            data = json.loads(edit.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict) and not data.get("frame"):
+            data["frame"] = old
+            write_atomic(edit, (json.dumps(data, ensure_ascii=False, indent=1) + "\n").encode("utf-8"))
+    write_atomic(paths.data / "cutlery.json",
+                 (json.dumps(dict(_settings(paths), frame=value), indent=1) + "\n").encode("utf-8"))
+    return value != old
 
 
 def render(paths: ProjectPaths, title: str, language: str = "") -> str:
@@ -48,6 +88,10 @@ def render(paths: ProjectPaths, title: str, language: str = "") -> str:
         f"exports = {q(str(paths.work / 'exports'))}",
         # the review: comments stay with the project (cutter's default .cutter/review/data), renders are regenerable
         f"review_media = {q(str(review_media_dir(paths)))}",
+        "",
+        # the picture format of the cuts; a cut's edit.json "frame" wins (cuts made before a change keep theirs)
+        "[timeline]",
+        f"frame = {q(frame(paths))}",
         "",
         # renders on the server come from the 360p stand-ins: render at that size, not upscaled (the film in full
         # resolution is made from the originals on the user's computer, see the export)

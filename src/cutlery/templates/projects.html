@@ -34,7 +34,7 @@
     </div>
     <div class="body">
       <div class="title-row"><h2>{{ c.p.name }}</h2><span class="pill {{ c.badge[1] }}">{{ t(c.badge[0], percent=((st.analysis.analysed * 100 // st.uploaded) if st.uploaded else 0)) }}</span></div>
-      <div class="meta">{{ t('projects.clips', n=st.usable) }} · <span class="js-duration" data-seconds="{{ st.duration_s }}"></span>{% if st.briefing.length %} · {{ t('projects.target', length=st.briefing.length) }}{% endif %}</div>
+      <div class="meta">{{ t('projects.clips', n=st.usable) }} · <span class="js-duration" data-seconds="{{ st.duration_s }}"></span>{% if st.briefing.length %} · {{ t('projects.target', length=st.briefing.length) }}{% endif %}{% if st.frame != '16:9' %} · <span class="frame-tag">{{ st.frame }}</span>{% endif %}</div>
       <div class="foot">
         <span>
           {%- if st.cuts -%}{{ t('projects.detail.cut', cut=cut_name(st.cuts[-1].id), n=st.open_comments) }}

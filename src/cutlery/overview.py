@@ -86,7 +86,7 @@ def state(projects, worker, jobs, reviews, project) -> dict:
         "duration_s": sum(c["duration"] or 0 for c in usable),
         "analysis": {"state": project["analysis_state"], "message": project["analysis_message"],
                      **{k: v for k, v in progress.items() if k != "fingerprints"}},
-        "briefing": bf, "briefing_saved": bool(bf), "files": fl,
+        "briefing": bf, "briefing_saved": bool(bf), "files": fl, "frame": cutter_project.frame(paths),
         "music_unclear": sum(1 for f in fl["music"] if (f.get("license") or "other") == "other"),
         "job": job, "cuts": cuts, "ready": ready(projects, worker, pid),
         "open_comments": sum(c.get("open", 0) for c in cuts if not c.get("locked")),

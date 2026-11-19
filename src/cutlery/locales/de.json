@@ -592,5 +592,16 @@
   "material.md.reject": "Aussortiert",
   "material.md.whole": "ganzer Clip",
   "material.md.range": "{a}–{b}",
-  "material.day_sum_one": "1 Clip · {time}"
+  "material.day_sum_one": "1 Clip · {time}",
+  "frame.title": "Format",
+  "new.frame_lead": "Was du machen willst. Du kannst es später ändern; schon geschnittene Fassungen behalten ihr Format.",
+  "frame.change_note": "Gilt ab der nächsten Fassung; frühere Fassungen behalten ihr Format.",
+  "frame.16_9": "Film, quer (YouTube, TV)",
+  "frame.9_16": "Reel, hochkant (Instagram Reels und Stories, TikTok, YouTube Shorts)",
+  "frame.4_5": "Feed-Beitrag, hochkant (Instagram, Facebook)",
+  "frame.3_4": "Hochformat (Instagram-Raster)",
+  "frame.1_1": "Quadratisch",
+  "frame.2_3": "Hoher Pin (Pinterest)",
+  "frame.4_3": "Klassisches Fernsehen",
+  "frame.21_9": "Kino-Breitbild"
 }

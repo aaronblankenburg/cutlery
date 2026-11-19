@@ -13,6 +13,19 @@
     <label for="name">{{ t('new.name') }}</label>
     <input type="text" id="name" name="name" required maxlength="120" autofocus>
   </div>
+  <fieldset class="frame-choice">
+    <legend>{{ t('frame.title') }}</legend>
+    <p class="small muted">{{ t('new.frame_lead') }}</p>
+    <div class="frame-options">
+      {% for f in frames %}
+      <label class="frame-option">
+        <input type="radio" name="frame" value="{{ f }}" {% if loop.first %}checked{% endif %}>
+        <span class="frame-shape shape-{{ f.replace(':', '-') }}" aria-hidden="true"></span>
+        <span><strong>{{ f }}</strong><br><span class="small muted">{{ t('frame.' + f.replace(':', '_')) }}</span></span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
   {% if error %}<div class="notice error">{{ t(error) }}</div>{% endif %}
   <div><button class="button primary" type="submit">{{ t('new.create') }}</button></div>
 </form>

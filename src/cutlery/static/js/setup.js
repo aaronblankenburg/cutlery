@@ -20,7 +20,7 @@ async function api(path, options = {}) {
 // ------------------------------------------------------------------ briefing
 
 const form = $('briefing');
-const fields = ['prompt', 'purpose', 'length', 'style', 'music', 'nogos'];
+const fields = ['prompt', 'purpose', 'length', 'style', 'music', 'nogos', 'frame'];
 let dirty = false;
 form.addEventListener('input', () => { dirty = true; });
 

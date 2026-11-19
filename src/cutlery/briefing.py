@@ -58,6 +58,10 @@ def refresh(paths: ProjectPaths, t, project_name: str) -> None:
 
 def render(data: dict, t, project_name: str, files: dict | None = None, paths: ProjectPaths | None = None) -> str:
     lines = [f"# {t('briefing.md.title', name=project_name)}", "", t("briefing.md.note"), ""]
+    if paths is not None:
+        from . import cutter_project
+        f = cutter_project.frame(paths)
+        lines += [f"## {t('frame.title')}", "", f"{f} – {t('frame.' + f.replace(':', '_'))}", ""]
     for key in FIELDS:
         value = data.get(key)
         if not value:

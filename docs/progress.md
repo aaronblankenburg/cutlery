@@ -174,24 +174,23 @@ milestone (and before any model switch), so a fresh session can continue without
   docs/formats.md "selects.json"), into briefing.md ("My selection from the footage") and,
   when there are any, into the job prompt (jobs.SELECTS). Measured on Namibia: 179 clips, 0.26 s, 210 KB.
 
-## Planned: vertical films (Instagram Reels), asked for 2026-11-19
+## Formats: Reels and other shapes (branches `frame` in cutter and Cutlery, not merged yet, 2026-11-19)
 
-The user wants to cut Reels too: 9:16 must be supported like 16:9. Today the sequence is fixed at 1920×1080 in
-cutter (timeline.FRAME_W/H, FCP7/FCPXML/FilmCraft sequence, titles, map intro, review renders) and Cutlery's review
-layout assumes a wide video. Stand-ins are already upright with the long side 640 (portrait 360×640).
-Plan (to be approved):
-1. cutter: a cut's frame in edit.json (`"frame": "16:9" | "9:16" | "1:1" | "4:5"`, default 16:9) through timeline,
-   exports (FCP7, FCPXML, FilmCraft sequence size), review render and review-data; portrait clips fill a 9:16 frame,
-   landscape clips are cropped to the centre first.
-2. cutter: reframing landscape clips for 9:16 from the image analysis (faces/people boxes per second; else the
-   centre), as position keyframes (FilmCraft motion, FCP7/FCPXML basic motion); titles, subtitles, credits and safe
-   areas for the Reels UI (nothing important in the top ~14 % and bottom ~20 %); a vertical map intro.
-3. cutter skill: Reels guidance (hook in the first 2 s, 15–90 s, cuts on the beat, big burned-in captions), an
-   export preset 1080×1920 H.264; a reel can be cut from the footage or derived from a film's cut.
-4. Cutlery: the format is chosen per project when it is created (film 16:9 or reel 9:16, later 1:1/4:5); review
-   page for tall video (player beside the comments), export page.
-Decided 2026-11-19: reels are their own projects (the footage is uploaded into that project), not a second format
-inside a film's project. Plan approved the same day.
+Asked for 2026-11-19 ("Reels genauso wie hochkant", "mehr gängige Formate"); decided: reels are their own projects.
+- cutter (branch `frame`): frame.py (16:9, 9:16, 4:5, 3:4, 1:1, 2:3, 4:3, 21:9, or WxH) per cut (edit.json
+  "frame", else [timeline] frame); timeline/FCP7/FCPXML/OTIO sequence size, FilmCraft sequence (tested with the real
+  filmcraft-cli: 1080x1920 renders), titles/credits/end cards moved into the frame (credits scaled as a block, 9:16
+  keeps out of the top 14 % and bottom 22 %), captions margin, map overview, review render 720 lines on the short
+  side, thumbnails, review player in the cut's shape. reframe.py: faces > people > animals once a second on the
+  stand-in (YuNet/YOLOX from the analysis models, cached in analysis/reframe.json, ~0.14 s per second of footage on
+  the server), a static window per shot; edit.json "focus" overrides. FilmCraft gets clip positions, the review
+  render crops there, the exchange formats get a cyan "Reframe shot N" marker (FCP 7 center units are not
+  documented well enough). Checked on Namibia clips (faces found in 8 of 8, subject moved into the 9:16 window).
+  Skill: Reels guidance in first-cut.md ("Formats").
+- Cutlery (branch `frame`): format cards on "New project", a select in the briefing; stored in
+  DATA/projects/<id>/cutlery.json, written to cutter.toml [timeline] frame and briefing.md ("Format"); a change pins
+  the old frame into the edit lists of earlier cuts. Needs the cutter release (cutter.frame is imported).
+- Not done: reframing that follows a moving subject within a shot (keyframes); a reel derived from a film's cut.
 
 ## Open questions
 

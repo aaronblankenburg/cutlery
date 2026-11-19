@@ -191,11 +191,11 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         if request.method == "POST":
             form = await read_form(request)
             try:
-                p = projects.create(str(form.get("name", "")))
+                p = projects.create(str(form.get("name", "")), str(form.get("frame") or "") or None)
             except ValueError:
-                return page(request, "project_new.html", error="new.name_missing")
+                return page(request, "project_new.html", error="new.name_missing", frames=cutter_project.FRAMES)
             return RedirectResponse(f"/projects/{p['id']}/setup", status_code=303)
-        return page(request, "project_new.html", error=None)
+        return page(request, "project_new.html", error=None, frames=cutter_project.FRAMES)
 
     async def export_page(request):
         p = project_or_404(request.path_params["pid"])
@@ -243,15 +243,18 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         p = project_or_404(request.path_params["pid"])
         paths = projects.paths(p["id"])
         if request.method == "PUT":
+            body = await read_json(request)
             try:
-                data = briefing_mod.check(await read_json(request))
-            except briefing_mod.BriefingError as e:
+                data = briefing_mod.check(body)
+                if body.get("frame"):
+                    cutter_project.set_frame(paths, str(body["frame"]))
+            except (briefing_mod.BriefingError, ValueError) as e:
                 return JSONResponse({"error": str(e)}, status_code=422)
             lang = lang_of(request)
             briefing_mod.save(paths, data, lambda key, **v: i18n.translate(lang, key, **v), p["name"])
             egress.record(db, p["id"], "briefing", "\n".join(str(v) for v in data.values()), replace=True)
             return JSONResponse({"ok": True})
-        return JSONResponse(briefing_mod.load(paths))
+        return JSONResponse(dict(briefing_mod.load(paths), frame=cutter_project.frame(paths)))
 
     async def api_memory(request):
         """The project memory (CLAUDE.md in the project folder): read, or replaced by the user."""
@@ -433,7 +436,7 @@ def create_app(cfg: config_mod.Config | None = None, *, check_storage: bool = Tr
         form = await read_form(request)
         if form.get("confirm") != p["name"]:
             st = await anyio.to_thread.run_sync(overview.state, projects, worker, jobs, reviews, p)
-            return page(request, "setup.html", project=p, st=st, delete_error=True)
+            return page(request, "setup.html", project=p, st=st, delete_error=True, frames=cutter_project.FRAMES)
         await anyio.to_thread.run_sync(jobs.cancel_project, p["id"])
         await anyio.to_thread.run_sync(reviews.forget, p["id"])
         await anyio.to_thread.run_sync(worker.cancel, p["id"])

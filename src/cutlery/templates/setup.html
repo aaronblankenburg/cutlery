@@ -67,6 +67,11 @@
           <input type="text" id="b-length" name="length" maxlength="200" list="b-length-options" value="{{ st.briefing.length or '' }}" placeholder="{{ t('briefing.length.placeholder') }}">
           <datalist id="b-length-options">{% for n in (3, 5, 10, 20) %}<option value="{{ t('briefing.length.' ~ n) }}"></option>{% endfor %}</datalist></div>
         <div><label for="b-style">{{ t('briefing.style') }}</label><input type="text" id="b-style" name="style" maxlength="4000" value="{{ st.briefing.style or '' }}"></div>
+        <div><label for="b-frame">{{ t('frame.title') }}</label>
+          <select id="b-frame" name="frame">
+            {% for f in frames %}<option value="{{ f }}" {% if st.frame == f %}selected{% endif %}>{{ f }} – {{ t('frame.' + f.replace(':', '_')) }}</option>{% endfor %}
+          </select>
+          <p class="small muted">{{ t('frame.change_note') }}</p></div>
         <div><label for="b-music">{{ t('briefing.music') }}</label>
           <select id="b-music" name="music"><option value=""></option>
             {% for m in ('own_only', 'own_and_search', 'search', 'none') %}<option value="{{ m }}" {% if st.briefing.music == m %}selected{% endif %}>{{ t('briefing.music.' + m) }}</option>{% endfor %}
