@@ -38,7 +38,11 @@
         <button type="button" id="m-tags-btn" aria-expanded="false" aria-controls="m-tags-pop">🏷 {{ t('material.tags') }} <span id="m-tags-n" class="tags-n"></span></button>
         <div class="tag-pop" id="m-tags-pop" role="dialog" aria-label="{{ t('material.tags_filter') }}" hidden>
           <label class="visually-hidden" for="m-tags-search">{{ t('material.tags_search') }}</label>
-          <input type="search" id="m-tags-search" placeholder="{{ t('material.tags_search') }}" autocomplete="off">
+          <div class="tag-pop-head">
+            <input type="search" id="m-tags-search" placeholder="{{ t('material.tags_search') }}" autocomplete="off">
+            <button type="button" id="m-tags-edit" aria-pressed="false">{{ t('material.tags_edit') }}</button>
+          </div>
+          <p class="small muted" id="m-tags-edit-hint" hidden>{{ t('material.tags_edit_hint') }}</p>
           <div id="m-tags-list" class="tag-groups"></div>
         </div>
       </div>
@@ -65,6 +69,7 @@
       <label class="visually-hidden" for="m-sel-tag">{{ t('material.tag_name') }}</label>
       <input type="text" id="m-sel-tag" list="m-tag-names" maxlength="40" placeholder="{{ t('material.tag_placeholder') }}" autocomplete="off">
       <button type="submit">🏷 {{ t('material.tag_add') }}</button>
+      <button type="button" id="m-sel-untag">{{ t('material.sel_untag') }}</button>
     </form>
     <button type="button" id="m-sel-fav" class="mark-fav">★ {{ t('material.favorite') }}</button>
     <button type="button" id="m-sel-rej">⊘ {{ t('material.reject') }}</button>

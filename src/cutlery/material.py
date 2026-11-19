@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import re
+import subprocess
 import threading
 
 from . import cutter_project
@@ -126,7 +128,13 @@ def footage(paths: ProjectPaths, known_rel_paths: set[str]) -> dict:
         days[-1]["clips"] += 1
         days[-1]["seconds"] += float(r["duration"] or 0)
     cuts = sorted({u["cut"] for us in usage.values() for u in us}, key=lambda n: int(re.sub(r"\D", "", n) or 0))
-    return {"clips": rows, "days": days, "people": people, "cuts": cuts, "selects": load(paths)["selects"]}
+    hide = load_hidden(paths)
+    for r in rows:
+        gone = set(hide["all"]) | set(hide["clips"].get(r["id"], []))
+        for kind, field in KIND_FIELDS.items():
+            r[field] = [x for x in r[field] if f"{kind}:{x[0]}" not in gone]
+    return {"clips": rows, "days": days, "people": people, "cuts": cuts, "selects": load(paths)["selects"],
+            "hidden": hide}
 
 
 def _seconds(rs) -> float:
@@ -162,12 +170,99 @@ def auto_tags(img: dict, duration=None) -> dict:
 
 
 def detail(paths: ProjectPaths, cid: str) -> dict:
-    """The time ranges of a clip's automatic tags, for the source monitor: {kind: {name: [[a, b], …]}}."""
+    """The time ranges of a clip's automatic tags, for the source monitor: {kind: {name: [[a, b], …]}}, without the
+    ones the user hid."""
     if not re.match(r"^[A-Za-z0-9_-]{1,20}$", cid):
         return {"tags": {}, "objects": {}, "moves": {}}
     img = _read(cutter_project.analysis_dir(paths) / "image" / f"{cid}.json") or {}
-    return {kind: {name: [[r["start"], r["end"]] for r in rs] for name, rs in found.items()}
+    hide = load_hidden(paths)
+    gone = set(hide["all"]) | set(hide["clips"].get(cid, []))
+    short = {v: k for k, v in KIND_FIELDS.items()}
+    return {kind: {name: [[r["start"], r["end"]] for r in rs] for name, rs in found.items()
+                   if f"{short[kind]}:{name}" not in gone}
             for kind, found in auto_ranges(img, img.get("duration")).items()}
+
+
+# ---------------------------------------------------------------- managing tags
+
+KIND_FIELDS = {"c": "tags", "o": "objects", "m": "moves"}
+KEY_RE = re.compile(r"^[com]:[A-Za-z0-9 _-]{1,40}$")
+CLIP_RE = re.compile(r"^[A-Za-z0-9_-]{1,20}$")
+
+
+def _hidden_file(paths: ProjectPaths):
+    return paths.data / "tags_hidden.json"
+
+
+def load_hidden(paths: ProjectPaths) -> dict:
+    """Automatic tags the user marked as wrong: {"all": ["c:snow"], "clips": {"C017": ["o:dog"]}}."""
+    d = _read(_hidden_file(paths))
+    if not isinstance(d, dict):
+        return {"all": [], "clips": {}}
+    return {"all": [x for x in d.get("all") or [] if isinstance(x, str)],
+            "clips": {k: [x for x in v if isinstance(x, str)] for k, v in (d.get("clips") or {}).items()
+                      if isinstance(v, list)}}
+
+
+def hide(paths: ProjectPaths, key: str, clip: str | None = None, hidden: bool = True) -> dict:
+    """Hide an automatic tag (key "c:snow", "o:dog", "m:pan_left") for one clip or everywhere, or show it again."""
+    if not isinstance(key, str) or not KEY_RE.match(key):
+        raise SelectError("key: c:, o: or m: and the tag's name")
+    if clip is not None and (not isinstance(clip, str) or not CLIP_RE.match(clip)):
+        raise SelectError("unknown clip")
+    with _lock:
+        d = load_hidden(paths)
+        items = d["all"] if clip is None else d["clips"].setdefault(clip, [])
+        if hidden and key not in items:
+            items.append(key)
+        if not hidden:
+            items[:] = [x for x in items if x != key]
+            if clip is None:                      # shown again everywhere: also where it was hidden per clip
+                for v in d["clips"].values():
+                    v[:] = [x for x in v if x != key]
+        d["clips"] = {k: v for k, v in d["clips"].items() if v}
+        write_atomic(_hidden_file(paths), (json.dumps(d, ensure_ascii=False, indent=1) + "\n").encode())
+        return d
+
+
+def remove_tag(paths: ProjectPaths, tag: str, clips=None) -> int:
+    """Delete one of the user's tags, everywhere or from the given clips. Returns how many entries went."""
+    if not isinstance(tag, str) or not tag.strip():
+        raise SelectError("tag: a name")
+    if clips is not None and (not isinstance(clips, list) or not all(isinstance(c, str) for c in clips)):
+        raise SelectError("clips: a list of clip IDs")
+    with _lock:
+        d = load(paths)
+        keep = [x for x in d["selects"] if not (x.get("kind") == "tag" and x.get("tag") == tag
+                                                and (clips is None or x.get("clip") in clips))]
+        n = len(d["selects"]) - len(keep)
+        if n:
+            d["selects"] = keep
+            _save(paths, d)
+        return n
+
+
+def rename_tag(paths: ProjectPaths, old: str, new: str) -> int:
+    """Rename one of the user's tags everywhere (two tags become one when the new name is taken)."""
+    new = " ".join(str(new or "").split())
+    if not new or len(new) > TAG_MAX:
+        raise SelectError(f"tag: a name of 1 to {TAG_MAX} characters")
+    with _lock:
+        d = load(paths)
+        n = 0
+        for x in d["selects"]:
+            if x.get("kind") == "tag" and x.get("tag") == old:
+                x["tag"], n = new, n + 1
+        seen, keep = set(), []
+        for x in d["selects"]:                    # the same tag on the same range twice: once
+            k = (x.get("clip"), x.get("kind"), x.get("tag"), x.get("in"), x.get("out")) if x.get("kind") == "tag" else id(x)
+            if k not in seen:
+                seen.add(k)
+                keep.append(x)
+        d["selects"] = keep
+        if n:
+            _save(paths, d)
+        return n
 
 
 def camera(c: dict) -> str:
@@ -182,6 +277,42 @@ def camera(c: dict) -> str:
     label = (prefix.group(0).rstrip("_") if prefix else "") or ext or "?"
     short = min(c.get("width") or 0, c.get("height") or 0) or c.get("height")
     return f"{label} {short}p" if short else label
+
+
+POSTER_W = 640                               # the stand-ins are 360p: their own size, sharp up to the largest tile
+_posters = threading.BoundedSemaphore(3)
+
+
+def poster(paths: ProjectPaths, cid: str):
+    """A still from the middle of the clip for its tile, made once from the stand-in (WORK/posters/<ID>.jpg) and
+    made again when the stand-in changes. None when the clip or its stand-in is unknown."""
+    if not re.match(r"^[A-Za-z0-9_-]{1,20}$", cid):
+        return None
+    clip = next((c for c in cutter_project.clips_json(paths) if c.get("id") == cid), None)
+    if not clip or not clip.get("rel_path"):
+        return None
+    src = paths.standin(clip["rel_path"]).resolve()
+    if not src.is_relative_to(paths.media.resolve()) or not src.is_file():
+        return None
+    target = paths.work / "posters" / f"{cid}.jpg"
+    try:
+        if target.stat().st_mtime >= src.stat().st_mtime:
+            return target
+    except OSError:
+        pass
+    with _posters:                               # a page of tiles asks for many at once
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_name(f"{cid}.part.jpg")
+        at = max(0.0, float(clip.get("duration") or 0) / 2)
+        for seek in (at, 0.0):                   # the middle; a clip whose middle cannot be read: its start
+            r = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-ss", f"{seek:.2f}", "-i", str(src),
+                                "-frames:v", "1", "-vf", f"scale='min({POSTER_W},iw)':-2", "-q:v", "3", str(tmp)],
+                               capture_output=True, timeout=60)
+            if r.returncode == 0 and tmp.is_file() and tmp.stat().st_size:
+                os.replace(tmp, target)
+                return target
+        tmp.unlink(missing_ok=True)
+    return None
 
 
 def transcript(paths: ProjectPaths, cid: str) -> dict:
@@ -308,7 +439,8 @@ def remove(paths: ProjectPaths, sid: str) -> bool:
 def briefing_lines(paths: ProjectPaths, t) -> list[str]:
     """The selection as a section of briefing.md (empty when there is none)."""
     sel = load(paths)["selects"]
-    if not sel:
+    wrong_any = load_hidden(paths)
+    if not sel and not (wrong_any["all"] or wrong_any["clips"]):
         return []
 
     def when(x):
@@ -336,6 +468,14 @@ def briefing_lines(paths: ProjectPaths, t) -> list[str]:
                 f"{x.get('clip')} ({x.get('file') or ''}), {when(x)}" + (f" – {x['note']}" if x.get("note") else "")
                 for x in items))
         lines.append("")
+    wrong = load_hidden(paths)
+    if wrong["all"] or wrong["clips"]:
+        def name(key):
+            label = t(f"tag.{key[0]}.{key[2:]}")
+            return label if not label.startswith("tag.") else key[2:]
+        parts = [f"{name(k)} ({t('material.md.everywhere')})" for k in wrong["all"]]
+        parts += [f"{name(k)} ({cid})" for cid, keys in sorted(wrong["clips"].items()) for k in keys]
+        lines += [f"**{t('material.md.wrong')}**", "", "; ".join(parts), ""]
     return lines
 
 

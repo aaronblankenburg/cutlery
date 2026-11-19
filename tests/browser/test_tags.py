@@ -105,6 +105,36 @@ def test_tags(page, server):
     page.click("#m-tags-btn")
     assert "Tag eins\n2" in page.inner_text("#m-tags-list")
 
+    # managing: an own tag renamed, removed from chosen clips; a wrong automatic tag hidden (clip, everywhere)
+    page.keyboard.press("Escape")
+    page.click("#m-tags-btn")
+    page.click("#m-tags-edit")
+    page.once("dialog", lambda d: d.accept("Sandsturm groß"))
+    page.click("#m-tags-list .tag-chip.editing:has-text('Sandsturm') button[title*='umbenennen']")
+    page.wait_for_selector("#m-tags-list .tag-chip.editing:has-text('Sandsturm groß')")
+    page.click("#m-tags-list .tag-chip.editing:has-text('Lagerfeuer') button")
+    page.wait_for_selector("#m-tags-list .hidden-tag:has-text('Lagerfeuer')")
+    assert "Lagerfeuer" not in page.inner_text(".tile[data-id=C003] .tile-badges")
+    page.click("#m-tags-list .hidden-tag")                                     # shown again
+    page.wait_for_function("() => document.querySelector('.tile[data-id=C003] .tile-badges').textContent.includes('Lagerfeuer')")
+    page.click("#m-tags-edit")
+    page.keyboard.press("Escape")
+    page.click(".tile[data-id=C001]", modifiers=["Control"])
+    page.fill("#m-sel-tag", "Tag eins")
+    page.click("#m-sel-untag")
+    page.wait_for_function("() => !document.querySelector('.tile[data-id=C001] .tile-badges').textContent.includes('Tag eins')")
+    assert "Tag eins" in page.inner_text(".tile[data-id=C003] .tile-badges")
+    page.click("#m-sel-clear")
+    page.click(".tile[data-id=C001]")
+    page.wait_for_selector("#mon-atags .tag-pair")
+    page.click("#mon-atags .tag-pair:has-text('Hund') .tag-hide")
+    page.wait_for_function("() => !document.getElementById('mon-atags').textContent.includes('Hund')")
+    page.keyboard.press("Escape")
+    hidden = json.loads((cfg.data_dir / "projects" / pid / "tags_hidden.json").read_text())
+    assert hidden == {"all": [], "clips": {"C001": ["o:dog"]}}
+    tags = sorted({s["tag"] for s in json.loads((cfg.data_dir / "projects" / pid / "selects.json").read_text())["selects"]})
+    assert tags == ["Sandsturm groß", "Tag eins"]
+
     # what the analysis looks at, on the setup page
     page.goto(f"{server['url']}/projects/{pid}/setup")
     page.click("#parts-box summary")

@@ -17,7 +17,8 @@ const store = {
   set(k, v) { try { localStorage.setItem(`cutlery-material-${k}`, JSON.stringify(v)); } catch { /* private window */ } },
 };
 const S = { clips: [], byId: new Map(), days: [], people: new Map(), cuts: [], selects: [], shown: [], open: null,
-  rIn: null, rOut: null, words: [], speed: 0, detail: null, chosen: new Set(), anchor: null };
+  rIn: null, rOut: null, words: [], speed: 0, detail: null, chosen: new Set(), anchor: null,
+  hidden: { all: [], clips: {} }, editTags: false };
 
 await load();
 
@@ -63,13 +64,14 @@ function clipHas(c, key) {
 }
 const clipUrl = (cid) => `/projects/${project}/analysis/clip/${encodeURIComponent(cid)}.mp4`;
 const stripUrl = (cid) => `/projects/${project}/analysis/strips/${encodeURIComponent(cid)}.jpg`;
+const posterUrl = (cid) => `/projects/${project}/material/poster/${encodeURIComponent(cid)}.jpg`;
 const latestCut = () => S.cuts[S.cuts.length - 1] || null;
 
 // ------------------------------------------------------------------ data
 
 async function refresh() {
   const d = await api(`/api/projects/${project}/material`);
-  S.clips = d.clips; S.days = d.days; S.cuts = d.cuts; S.selects = d.selects;
+  S.clips = d.clips; S.days = d.days; S.cuts = d.cuts; S.selects = d.selects; S.hidden = d.hidden || { all: [], clips: {} };
   S.byId = new Map(S.clips.map((c) => [c.id, c]));
   S.people = new Map(d.people.map((p) => [p.id, p.name]));
   for (const id of [...S.chosen]) if (!S.byId.has(id)) S.chosen.delete(id);
@@ -158,6 +160,66 @@ function counts() {
   }
   return n;
 }
+// managing tags (the popover's "Edit"): own tags renamed or deleted everywhere, automatic ones hidden as wrong
+async function tagAction(body) {
+  const r = await api(`/api/projects/${project}/tags`, { method: 'POST', body: JSON.stringify(body) });
+  S.selects = r.selects;
+  if (r.hidden) S.hidden = r.hidden;
+  return r;
+}
+$('m-tags-edit').addEventListener('click', () => {
+  S.editTags = !S.editTags;
+  $('m-tags-edit').setAttribute('aria-pressed', String(S.editTags));
+  $('m-tags-edit').textContent = t(S.editTags ? 'material.tags_edit_done' : 'material.tags_edit');
+  $('m-tags-edit-hint').hidden = !S.editTags;
+  tagList();
+});
+async function renameTag(name) {
+  const to = (prompt(t('material.tag_rename_prompt', { tag: name }), name) || '').trim();
+  if (!to || to === name) return;
+  try {
+    await tagAction({ action: 'rename', tag: name, to });
+    setTags([...new Set(F.tags.map((k) => (k === `u:${name}` ? `u:${to}` : k)))]);
+    afterTags();
+  } catch (e) { alert(e.message); }
+}
+async function deleteTag(name, n) {
+  if (!confirm(t('material.tag_delete_confirm', { tag: name, n }))) return;
+  try {
+    await tagAction({ action: 'remove', tag: name });
+    setTags(F.tags.filter((k) => k !== `u:${name}`));
+    afterTags();
+  } catch (e) { alert(e.message); }
+}
+async function hideTag(key, clip, hidden = true) {
+  try {
+    await tagAction({ action: 'hide', key, clip: clip ?? null, hidden });
+    if (hidden && clip == null) setTags(F.tags.filter((k) => k !== key));
+    await refresh();                                   // the clips' tags come without the hidden ones
+    afterTags();
+  } catch (e) { alert(e.message); }
+}
+function afterTags() {
+  tagNames(); render();
+  if (!pop.hidden) tagList();
+  if (S.open) { showTags(); track(); reloadDetail(); }
+}
+function editChip(kind, key, n) {
+  const name = key.slice(2);
+  const chip = el('span', `tag-chip k-${kind} editing`);
+  chip.append(el('span', null, tagLabel(kind, name)), el('span', 'n', String(n)));
+  const act = (label, title, fn) => {
+    const b = el('button', 'x', label);
+    b.type = 'button'; b.title = title; b.setAttribute('aria-label', title);
+    b.addEventListener('click', fn);
+    chip.append(b);
+  };
+  if (kind === 'u') {
+    act('✎', t('material.tag_rename', { tag: name }), () => renameTag(name));
+    act('×', t('material.tag_delete_all', { tag: name }), () => deleteTag(name, n));
+  } else act('×', t('material.tag_hide', { tag: tagLabel(kind, name) }), () => hideTag(key));
+  return chip;
+}
 function tagList() {
   const box = $('m-tags-list'), q = $('m-tags-search').value.trim().toLowerCase();
   box.textContent = '';
@@ -169,6 +231,7 @@ function tagList() {
     box.append(el('h4', 'tag-group-title', t(title)));
     const row = el('div', 'tag-chips');
     for (const key of keys.slice(0, 60)) {
+      if (S.editTags) { row.append(editChip(kind, key, n.get(key))); continue; }
       const on = F.tags.includes(key);
       const b = el('button', `tag-chip k-${kind}${on ? ' on' : ''}`);
       b.type = 'button';
@@ -180,6 +243,19 @@ function tagList() {
         tagList();
         box.querySelector(`.tag-chip[data-key="${CSS.escape(key)}"]`)?.focus();     // the list is new: keep the place
       });
+      row.append(b);
+    }
+    box.append(row);
+  }
+  if (S.editTags && S.hidden.all.length) {                 // hidden everywhere: shown again with a click
+    box.append(el('h4', 'tag-group-title', t('material.tags_hidden')));
+    const row = el('div', 'tag-chips');
+    for (const key of S.hidden.all) {
+      const b = el('button', `tag-chip k-${key[0]} hidden-tag`);
+      b.type = 'button';
+      b.title = t('material.tag_show');
+      b.append(el('span', null, tagLabel(key[0], key.slice(2))), el('span', 'x', '↺'));
+      b.addEventListener('click', () => hideTag(key, null, false));
       row.append(b);
     }
     box.append(row);
@@ -317,6 +393,7 @@ function grid(clips) {
     const frame = el('div', 'tile-frame');
     frame.style.aspectRatio = `${c.width} / ${c.height}`;
     if (c.width / c.height < 16 / 9 - 0.01) frame.classList.add('portrait');     // taller than the tile: fit the height
+    frame.dataset.poster = posterUrl(c.id);
     if (c.strip) frame.dataset.strip = stripUrl(c.id);
     pic.append(frame);
     pic.append(el('span', 'tile-time', timeOf(c)), el('span', 'tile-dur', mmss(c.duration, false)));
@@ -348,7 +425,8 @@ function grid(clips) {
   return g;
 }
 
-// the poster: the middle picture of the clip's film strip (five pictures side by side, 3 px apart)
+// the poster: a still from the middle of the clip in the stand-in's own size; while it is not there (or cannot be
+// made) the middle picture of the clip's film strip (five small pictures side by side, 3 px apart)
 const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
   for (const e of entries) {
     if (!e.isIntersecting) continue;
@@ -357,9 +435,20 @@ const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries)
   }
 }, { rootMargin: '400px' }) : null;
 function observe() {
-  for (const f of document.querySelectorAll('.tile-frame[data-strip]')) (io ? io.observe(f) : poster(f));
+  for (const f of document.querySelectorAll('.tile-frame[data-poster]')) (io ? io.observe(f) : poster(f));
 }
 function poster(frame) {
+  const img = new Image();
+  img.onload = () => {
+    frame.style.backgroundImage = `url("${img.src}")`;
+    frame.style.backgroundSize = 'cover';
+    frame.style.backgroundPosition = 'center';
+    frame.classList.add('sharp');
+  };
+  img.onerror = () => { if (frame.dataset.strip) fromStrip(frame); };
+  img.src = frame.dataset.poster;
+}
+function fromStrip(frame) {
   const img = new Image();
   img.onload = () => {
     const h = img.naturalHeight, ratio = frame.clientWidth / Math.max(1, frame.clientHeight);
@@ -454,6 +543,16 @@ $('m-sel-form').addEventListener('submit', (e) => {
   addMany([...S.chosen].map((clip) => ({ clip, kind: 'tag', tag })), t('material.tagged_n', { tag, n: S.chosen.size }));
   $('m-sel-tag').value = '';
 });
+$('m-sel-untag').addEventListener('click', async () => {
+  const tag = $('m-sel-tag').value.trim();
+  if (!tag || !S.chosen.size) { $('m-sel-tag').focus(); return; }
+  try {
+    const r = await tagAction({ action: 'remove', tag, clips: [...S.chosen] });
+    $('m-sel-tag').value = '';
+    afterTags();
+    flashBar(t('material.untagged_n', { tag, n: r.removed }));
+  } catch (e) { alert(e.message); }
+});
 $('m-sel-fav').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'favorite' })), t('material.saved_favorite')));
 $('m-sel-rej').addEventListener('click', () => addMany([...S.chosen].map((clip) => ({ clip, kind: 'reject' })), t('material.saved_reject')));
 $('m-sel-clear').addEventListener('click', () => { S.chosen.clear(); S.anchor = null; render(); });
@@ -527,11 +626,7 @@ async function openMonitor(cid) {
   $('mon-note').value = '';
   if (!mon.open) mon.showModal();
   showMarks(); showRange(); track(); showTags();
-  api(`/api/projects/${project}/material/${encodeURIComponent(cid)}/tags`).then((d) => {
-    if (S.open !== cid) return;
-    S.detail = d;
-    showTags();
-  }).catch(() => {});
+  reloadDetail();
   const tr = $('mon-transcript');
   tr.textContent = '';
   tr.append(el('p', 'small muted', t('material.loading')));
@@ -609,6 +704,16 @@ function showMarks() {
     ul.append(li);
   }
 }
+function reloadDetail() {
+  const cid = S.open;
+  if (!cid) return;
+  api(`/api/projects/${project}/material/${encodeURIComponent(cid)}/tags`).then((d) => {
+    if (S.open !== cid) return;
+    S.detail = d;
+    showTags();
+  }).catch(() => {});
+}
+
 // tags of this clip: the user's own (with range, ×), the field to add one, and what the analysis found; pointing at
 // a tag shows where it is on the bar under the picture, a click jumps there
 function showTags() {
@@ -659,7 +764,14 @@ function showTags() {
         seek(next[0]);
       });
       hover(b, rs);
-      row.append(b);
+      const wrap = el('span', 'tag-pair');
+      const x = el('button', 'tag-hide', '×');
+      x.type = 'button';
+      x.title = t('material.tag_hide_clip', { tag: tagLabel(kind, name) });
+      x.setAttribute('aria-label', x.title);
+      x.addEventListener('click', () => hideTag(`${kind}:${name}`, c.id));
+      wrap.append(b, x);
+      row.append(wrap);
     }
     box.append(row);
   }

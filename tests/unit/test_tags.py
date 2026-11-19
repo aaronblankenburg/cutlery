@@ -47,7 +47,7 @@ class TestFound:
         d = client.get(f"/api/projects/{pid}/material/C001/tags").json()
         assert d["tags"] == {"desert": [[0, 8]], "road": [[8, 12.0]]}
         assert d["objects"] == {"dog": [[2, 6]]} and d["moves"] == {"pan_left": [[0, 3.5]]}
-        assert client.get(f"/api/projects/{pid}/material/../tags").status_code == 404
+        assert client.get(f"/api/projects/{pid}/material/../tags").status_code in (404, 405)
         assert client.get(f"/api/projects/{pid}/material/C003/tags").json() == {"tags": {}, "objects": {}, "moves": {}}
 
 
@@ -115,3 +115,63 @@ class TestParts:
         assert client.put(f"/api/projects/{pid}/analysis/parts", json={"parts": ["smell"]}).status_code == 422
         assert client.put(f"/api/projects/{pid}/analysis/parts", json={"parts": "tags"}).status_code == 422
         assert "Was die Analyse auswertet" in client.get(f"/projects/{pid}/setup", headers={"Accept-Language": "de"}).text
+
+
+class TestPoster:
+    def test_a_sharp_still_from_the_stand_in(self, client, cfg):
+        import shutil
+        import subprocess
+        import pytest
+        if not shutil.which("ffmpeg"):
+            pytest.skip("needs ffmpeg")
+        pid = project(client, cfg)
+        paths = ProjectPaths(cfg, pid)
+        src = paths.standin("B/2012-07-15 08-00-00 GOPR0001.MP4")
+        src.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25:d=4",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", str(src)], check=True)
+        r = client.get(f"/projects/{pid}/material/poster/C001.jpg")
+        assert r.status_code == 200 and r.content[:2] == b"\xff\xd8"
+        made = paths.work / "posters" / "C001.jpg"
+        assert made.is_file()
+        stamp = made.stat().st_mtime_ns
+        assert client.get(f"/projects/{pid}/material/poster/C001.jpg").status_code == 200
+        assert made.stat().st_mtime_ns == stamp                                  # made once
+        assert client.get(f"/projects/{pid}/material/poster/C003.jpg").status_code == 404   # no stand-in
+        assert client.get(f"/projects/{pid}/material/poster/..%2Fx.jpg").status_code == 404
+
+
+class TestManaging:
+    def test_own_tags_deleted_renamed_and_removed_from_chosen_clips(self, client, cfg):
+        pid = with_analysis(client, cfg)
+        items = [{"clip": c, "kind": "tag", "tag": t} for c in ("C001", "C002", "C004") for t in ("Camp", "Zelt")]
+        client.post(f"/api/projects/{pid}/selects", json={"items": items})
+        api = f"/api/projects/{pid}/tags"
+        r = client.post(api, json={"action": "remove", "tag": "Camp", "clips": ["C001", "C002"]}).json()
+        assert r["removed"] == 2 and sorted(s["clip"] for s in r["selects"] if s["tag"] == "Camp") == ["C004"]
+        r = client.post(api, json={"action": "rename", "tag": "Zelt", "to": "Camp"}).json()
+        assert r["renamed"] == 3
+        camp = sorted(s["clip"] for s in r["selects"] if s["tag"] == "Camp")
+        assert camp == ["C001", "C002", "C004"]                                   # merged, C004 once
+        assert client.post(api, json={"action": "remove", "tag": "Camp"}).json()["removed"] == 3
+        assert client.get(f"/api/projects/{pid}/selects").json()["selects"] == []
+        assert client.post(api, json={"action": "rename", "tag": "x", "to": ""}).status_code == 422
+        assert client.post(api, json={"action": "explode"}).status_code == 422
+
+    def test_wrong_automatic_tags_are_hidden(self, client, cfg):
+        pid = with_analysis(client, cfg)
+        api = f"/api/projects/{pid}/tags"
+        assert client.post(api, json={"action": "hide", "key": "o:dog", "clip": "C001"}).status_code == 200
+        r = client.post(api, json={"action": "hide", "key": "c:road"}).json()
+        assert r["hidden"] == {"all": ["c:road"], "clips": {"C001": ["o:dog"]}}
+        c1 = next(c for c in client.get(f"/api/projects/{pid}/material").json()["clips"] if c["id"] == "C001")
+        assert c1["tags"] == [["desert", 8.0]] and c1["objects"] == []
+        d = client.get(f"/api/projects/{pid}/material/C001/tags").json()
+        assert "road" not in d["tags"] and d["objects"] == {}
+        client.put(f"/api/projects/{pid}/briefing", json={"prompt": "Ein Film."}, headers={"Accept-Language": "de"})
+        md = (cfg.data_dir / "projects" / pid / "briefing.md").read_text()
+        assert "Falsch erkannte Tags der Analyse" in md and "Straße (überall)" in md and "Hund (C001)" in md
+        r = client.post(api, json={"action": "hide", "key": "c:road", "hidden": False}).json()
+        assert r["hidden"]["all"] == []
+        assert client.post(api, json={"action": "hide", "key": "x:road"}).status_code == 422
+        assert client.post(api, json={"action": "hide", "key": "c:road", "clip": "../x"}).status_code == 422

@@ -68,7 +68,7 @@ def test_material_page(page, server):
     order = page.eval_on_selector_all(".tile", "els => els.map(e => e.dataset.id)")
     assert order == ["C003", "C002", "C001"]                                   # by day, then by time
     assert page.inner_text("#m-days").count("·") == 2
-    page.wait_for_function("() => [...document.querySelectorAll('.tile-frame')].every(f => f.style.backgroundImage)")
+    page.wait_for_function("() => [...document.querySelectorAll('.tile-frame')].every(f => f.style.backgroundImage.includes('/poster/'))")
     assert page.evaluate("() => document.querySelector('.tile[data-id=C002] .tile-frame').classList.contains('portrait')")
 
     # hover scrub: a video follows the pointer

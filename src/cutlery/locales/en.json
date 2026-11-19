@@ -772,5 +772,20 @@
   "tag.m.push_in": "Push in",
   "tag.m.pull_out": "Pull out",
   "tag.m.static": "Static",
-  "tag.m.handheld": "Handheld"
+  "tag.m.handheld": "Handheld",
+  "material.tags_edit": "Edit",
+  "material.tags_edit_done": "Done",
+  "material.tags_edit_hint": "Rename or delete your own tags; hide tags the analysis got wrong (Claude is told to ignore them).",
+  "material.tag_rename": "Rename {tag}",
+  "material.tag_rename_prompt": "New name for “{tag}” (an existing name merges both):",
+  "material.tag_delete_all": "Delete {tag} everywhere",
+  "material.tag_delete_confirm": "Delete the tag “{tag}” from {n} clips?",
+  "material.tag_hide": "Hide {tag} everywhere (found wrongly)",
+  "material.tag_hide_clip": "Hide {tag} for this clip (found wrongly)",
+  "material.tags_hidden": "Hidden",
+  "material.tag_show": "Show again",
+  "material.sel_untag": "Remove tag",
+  "material.untagged_n": "{tag} removed from {n} clips",
+  "material.md.everywhere": "everywhere",
+  "material.md.wrong": "Tags the analysis got wrong (ignore them)"
 }

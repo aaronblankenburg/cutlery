@@ -772,5 +772,20 @@
   "tag.m.push_in": "Ranfahrt",
   "tag.m.pull_out": "Rückfahrt",
   "tag.m.static": "Statisch",
-  "tag.m.handheld": "Handkamera"
+  "tag.m.handheld": "Handkamera",
+  "material.tags_edit": "Bearbeiten",
+  "material.tags_edit_done": "Fertig",
+  "material.tags_edit_hint": "Eigene Tags umbenennen oder löschen; falsch erkannte Tags ausblenden (Claude ignoriert sie dann).",
+  "material.tag_rename": "{tag} umbenennen",
+  "material.tag_rename_prompt": "Neuer Name für „{tag}“ (ein vorhandener Name führt beide zusammen):",
+  "material.tag_delete_all": "{tag} überall löschen",
+  "material.tag_delete_confirm": "Den Tag „{tag}“ von {n} Clips löschen?",
+  "material.tag_hide": "{tag} überall ausblenden (falsch erkannt)",
+  "material.tag_hide_clip": "{tag} bei diesem Clip ausblenden (falsch erkannt)",
+  "material.tags_hidden": "Ausgeblendet",
+  "material.tag_show": "Wieder anzeigen",
+  "material.sel_untag": "Tag entfernen",
+  "material.untagged_n": "{tag} von {n} Clips entfernt",
+  "material.md.everywhere": "überall",
+  "material.md.wrong": "Falsch erkannte Tags der Analyse (nicht beachten)"
 }

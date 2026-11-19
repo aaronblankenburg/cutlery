@@ -117,6 +117,41 @@ def routes(c: Context):
         return JSONResponse(await anyio.to_thread.run_sync(material.transcript, projects.paths(p["id"]),
                                                            request.path_params["cid"]))
 
+    async def api_tags(request):
+        """Managing tags: {"action": "remove", "tag", "clips"?} deletes one of the user's tags (everywhere or from
+        these clips), {"action": "rename", "tag", "to"}, {"action": "hide", "key", "clip"?, "hidden"} marks an
+        automatic tag as wrong (or right again)."""
+        p = c.project_or_404(request.path_params["pid"])
+        paths = projects.paths(p["id"])
+        body = await c.read_json(request)
+        if not isinstance(body, dict):
+            return JSONResponse({"error": "object expected"}, status_code=422)
+        try:
+            action = body.get("action")
+            if action == "remove":
+                out = {"removed": await anyio.to_thread.run_sync(material.remove_tag, paths, body.get("tag"),
+                                                                 body.get("clips"))}
+            elif action == "rename":
+                out = {"renamed": await anyio.to_thread.run_sync(material.rename_tag, paths, body.get("tag"),
+                                                                 body.get("to"))}
+            elif action == "hide":
+                out = {"hidden": await anyio.to_thread.run_sync(material.hide, paths, body.get("key"), body.get("clip"),
+                                                                bool(body.get("hidden", True)))}
+            else:
+                return JSONResponse({"error": "action: remove, rename or hide"}, status_code=422)
+        except material.SelectError as e:
+            return JSONResponse({"error": str(e)}, status_code=422)
+        await anyio.to_thread.run_sync(briefing.refresh, paths, t_for(request), p["name"])
+        out["selects"] = (await anyio.to_thread.run_sync(material.load, paths))["selects"]
+        return JSONResponse(out)
+
+    async def material_poster(request):
+        p = c.project_or_404(request.path_params["pid"])
+        f = await anyio.to_thread.run_sync(material.poster, projects.paths(p["id"]), request.path_params["cid"])
+        if not f:
+            raise HTTPException(404)
+        return FileResponse(f, media_type="image/jpeg", headers={"cache-control": "private, max-age=3600"})
+
     async def api_material_tags(request):
         p = c.project_or_404(request.path_params["pid"])
         return JSONResponse(await anyio.to_thread.run_sync(material.detail, projects.paths(p["id"]),
@@ -382,8 +417,10 @@ def routes(c: Context):
         Route("/api/projects/{pid}/material", api_material),
         Route("/api/projects/{pid}/material/{cid}/transcript", api_material_transcript),
         Route("/api/projects/{pid}/material/{cid}/tags", api_material_tags),
+        Route("/projects/{pid}/material/poster/{cid}.jpg", material_poster),
         Route("/api/projects/{pid}/selects", api_selects, methods=["GET", "POST"]),
         Route("/api/projects/{pid}/selects/{sid}", api_select, methods=["PATCH", "DELETE"]),
+        Route("/api/projects/{pid}/tags", api_tags, methods=["POST"]),
         Route("/projects/{pid}/analysis/clip/{cid}.mp4", analysis_clip),
         Route("/projects/{pid}/analysis/{kind}/{name}", analysis_file),
         Route("/projects/{pid}/thumb/{n:int}", thumb),
